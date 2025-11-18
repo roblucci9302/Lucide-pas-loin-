@@ -47,6 +47,14 @@ try {
 }
 let lastScreenshot = null;
 
+// 🆕 LENGTH_PRESETS - Configuration pour le contrôle de la longueur des réponses
+const LENGTH_PRESETS = {
+    concise: 512,        // Réponse courte et concise
+    standard: 2048,      // Longueur standard (ancienne valeur par défaut)
+    detailed: 4096,      // Réponse détaillée (nouvelle valeur par défaut)
+    comprehensive: 8192  // Document complet et exhaustif (nécessite Gemini)
+};
+
 async function captureScreenshot(options = {}) {
     if (process.platform === 'darwin') {
         try {
@@ -277,7 +285,7 @@ class AskService {
      * @param {string} userPrompt
      * @returns {Promise<{success: boolean, response?: string, error?: string}>}
      */
-    async sendMessage(userPrompt, conversationHistoryRaw=[]) {
+    async sendMessage(userPrompt, conversationHistoryRaw=[], targetLength='detailed') {
         internalBridge.emit('window:requestVisibility', { name: 'ask', visible: true });
         this.state = {
             ...this.state,
@@ -482,6 +490,28 @@ class AskService {
                 console.log(`[AskService] Using default model: ${modelInfo.model} for provider: ${modelInfo.provider}`);
             }
 
+            // 🆕 PHASE 1.3: Auto-switch to Gemini for comprehensive (long) documents
+            if (targetLength === 'comprehensive') {
+                const providerSettingsRepository = require('../common/repositories/providerSettings');
+                const geminiSettings = await providerSettingsRepository.getByProvider('gemini');
+
+                if (geminiSettings && geminiSettings.api_key) {
+                    console.log(`[AskService] 📄 Comprehensive document requested (8192 tokens)`);
+                    console.log(`[AskService] 🔄 Auto-switching to Gemini for optimal long-form generation`);
+                    console.log(`[AskService] Previous: ${modelInfo.provider}/${modelInfo.model}`);
+
+                    // Switch to Gemini
+                    modelInfo.provider = 'gemini';
+                    modelInfo.apiKey = geminiSettings.api_key;
+                    modelInfo.model = geminiSettings.selected_llm_model || 'gemini-2.5-flash';
+
+                    console.log(`[AskService] New: ${modelInfo.provider}/${modelInfo.model}`);
+                } else {
+                    console.warn(`[AskService] ⚠️ Comprehensive length requested but Gemini not configured`);
+                    console.warn(`[AskService] Continuing with ${modelInfo.provider} (may have token limitations)`);
+                }
+            }
+
             // Vérifier si les captures d'écran sont activées
             const isScreenshotEnabled = getWindowManager().getScreenshotEnabled();
             console.log(`[AskService] Screenshot capture is ${isScreenshotEnabled ? 'enabled' : 'disabled'}`);
@@ -598,11 +628,15 @@ class AskService {
                 });
             }
             
+            // 🆕 Déterminer maxTokens basé sur targetLength
+            const maxTokens = LENGTH_PRESETS[targetLength] || LENGTH_PRESETS.detailed;
+            console.log(`[AskService] Using targetLength: ${targetLength} (maxTokens: ${maxTokens})`);
+
             const streamingLLM = createStreamingLLM(modelInfo.provider, {
                 apiKey: modelInfo.apiKey,
                 model: modelInfo.model,
                 temperature: 0.7,
-                maxTokens: 2048,
+                maxTokens: maxTokens,
                 usePortkey: modelInfo.provider === 'openai-glass',
                 portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
             });
