@@ -10,6 +10,7 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
 const conversationHistoryService = require('./conversationHistoryService');
+const documentGenerationService = require('./documentGenerationService'); // Phase 5 OUTPUT
 
 /**
  * @class ExportService
@@ -599,6 +600,288 @@ class ExportService {
             console.error('[ExportService] Error exporting to DOCX:', error);
             throw new Error(`Failed to export to DOCX: ${error.message}`);
         }
+    }
+
+    /**
+     * Export professional document with template (Phase 5 OUTPUT)
+     * @param {Object} options - Export options
+     * @returns {Promise<Object>} Export result
+     */
+    async exportProfessionalDocument(options) {
+        const {
+            templateId,
+            agentProfile,
+            data,
+            format = 'markdown', // markdown, pdf, docx
+            customizations = {},
+            filePath = null
+        } = options;
+
+        console.log(`[ExportService] Exporting professional document: ${templateId} (${format})`);
+
+        try {
+            // Generate document using documentGenerationService
+            const result = await documentGenerationService.generateFromTemplate({
+                templateId,
+                agentProfile,
+                data,
+                format,
+                customizations
+            });
+
+            // If custom file path provided, move the file
+            if (filePath && filePath !== result.filePath) {
+                await fs.rename(result.filePath, filePath);
+                result.filePath = filePath;
+            }
+
+            console.log(`[ExportService] Professional document exported: ${result.filePath}`);
+            return result;
+        } catch (error) {
+            console.error('[ExportService] Error exporting professional document:', error);
+            throw new Error(`Failed to export professional document: ${error.message}`);
+        }
+    }
+
+    /**
+     * Export document from conversation analysis (Phase 5 OUTPUT)
+     * @param {Object} options - Export options
+     * @returns {Promise<Object>} Export result
+     */
+    async exportDocumentFromConversation(options) {
+        const {
+            sessionId,
+            agentProfile,
+            documentType,
+            format = 'markdown',
+            userId,
+            filePath = null
+        } = options;
+
+        console.log(`[ExportService] Exporting document from conversation: ${documentType} (${format})`);
+
+        try {
+            // Generate document from conversation
+            const result = await documentGenerationService.generateFromConversation({
+                sessionId,
+                agentProfile,
+                documentType,
+                format,
+                userId
+            });
+
+            // If custom file path provided, move the file
+            if (filePath && filePath !== result.filePath) {
+                await fs.rename(result.filePath, filePath);
+                result.filePath = filePath;
+            }
+
+            console.log(`[ExportService] Document from conversation exported: ${result.filePath}`);
+            return result;
+        } catch (error) {
+            console.error('[ExportService] Error exporting document from conversation:', error);
+            throw new Error(`Failed to export document from conversation: ${error.message}`);
+        }
+    }
+
+    /**
+     * Convert markdown to professional PDF with branding
+     * (Enhanced version with headers, footers, and styling)
+     * @param {string} markdownContent - Markdown content
+     * @param {string} filePath - Output file path
+     * @param {Object} options - PDF options
+     * @returns {Promise<Object>} Export result
+     */
+    async convertMarkdownToProfessionalPDF(markdownContent, filePath, options = {}) {
+        const {
+            title = 'Document',
+            agentProfile = 'lucide_assistant',
+            author = 'Lucide AI Assistant',
+            includeHeader = true,
+            includeFooter = true,
+            confidential = false
+        } = options;
+
+        console.log(`[ExportService] Converting markdown to professional PDF`);
+
+        return new Promise((resolve, reject) => {
+            try {
+                // Create PDF document
+                const doc = new PDFDocument({
+                    size: 'A4',
+                    margins: { top: 80, bottom: 80, left: 60, right: 60 },
+                    info: {
+                        Title: title,
+                        Author: author,
+                        Subject: 'Professional Document',
+                        CreationDate: new Date()
+                    }
+                });
+
+                const stream = require('fs').createWriteStream(filePath);
+                doc.pipe(stream);
+
+                // Header on every page
+                if (includeHeader) {
+                    const addHeader = () => {
+                        doc.save();
+                        doc.fontSize(9)
+                            .fillColor('#666666')
+                            .text(title, 60, 40, { width: 475, align: 'left' });
+
+                        doc.fontSize(8)
+                            .fillColor('#999999')
+                            .text(new Date().toLocaleDateString('fr-FR'), 60, 40, { width: 475, align: 'right' });
+
+                        // Header line
+                        doc.strokeColor('#CCCCCC')
+                            .lineWidth(0.5)
+                            .moveTo(60, 60)
+                            .lineTo(535, 60)
+                            .stroke();
+
+                        doc.restore();
+                    };
+                    addHeader();
+                }
+
+                // Simple markdown rendering
+                const lines = markdownContent.split('\n');
+                let inCodeBlock = false;
+
+                lines.forEach(line => {
+                    // Check page break
+                    if (doc.y > 720) {
+                        doc.addPage();
+                        if (includeHeader) {
+                            // Re-add header on new page
+                            doc.fontSize(9)
+                                .fillColor('#666666')
+                                .text(title, 60, 40, { width: 475, align: 'left' });
+                            doc.fontSize(8)
+                                .fillColor('#999999')
+                                .text(new Date().toLocaleDateString('fr-FR'), 60, 40, { width: 475, align: 'right' });
+                            doc.strokeColor('#CCCCCC')
+                                .lineWidth(0.5)
+                                .moveTo(60, 60)
+                                .lineTo(535, 60)
+                                .stroke();
+                        }
+                    }
+
+                    // Code block toggle
+                    if (line.startsWith('```')) {
+                        inCodeBlock = !inCodeBlock;
+                        doc.moveDown(0.3);
+                        return;
+                    }
+
+                    // Render based on markdown syntax
+                    if (inCodeBlock) {
+                        // Code block
+                        doc.fontSize(9)
+                            .fillColor('#000000')
+                            .font('Courier')
+                            .text(line, { lineGap: 2 });
+                    } else if (line.startsWith('# ')) {
+                        // H1
+                        doc.fontSize(18)
+                            .fillColor('#1F2937')
+                            .font('Helvetica-Bold')
+                            .text(line.substring(2), { lineGap: 4 });
+                        doc.moveDown(0.5);
+                    } else if (line.startsWith('## ')) {
+                        // H2
+                        doc.fontSize(14)
+                            .fillColor('#374151')
+                            .font('Helvetica-Bold')
+                            .text(line.substring(3), { lineGap: 3 });
+                        doc.moveDown(0.3);
+                    } else if (line.startsWith('### ')) {
+                        // H3
+                        doc.fontSize(12)
+                            .fillColor('#4B5563')
+                            .font('Helvetica-Bold')
+                            .text(line.substring(4), { lineGap: 2 });
+                        doc.moveDown(0.2);
+                    } else if (line.startsWith('---')) {
+                        // Horizontal rule
+                        doc.moveDown(0.5);
+                        doc.strokeColor('#DDDDDD')
+                            .lineWidth(0.5)
+                            .moveTo(60, doc.y)
+                            .lineTo(535, doc.y)
+                            .stroke();
+                        doc.moveDown(0.5);
+                    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+                        // List item
+                        doc.fontSize(10)
+                            .fillColor('#000000')
+                            .font('Helvetica')
+                            .text(`• ${line.substring(2)}`, { indent: 10, lineGap: 2 });
+                    } else if (line.trim() === '') {
+                        // Empty line
+                        doc.moveDown(0.3);
+                    } else {
+                        // Regular paragraph
+                        doc.fontSize(10)
+                            .fillColor('#000000')
+                            .font('Helvetica')
+                            .text(line, { align: 'left', lineGap: 2 });
+                    }
+                });
+
+                // Footer
+                if (includeFooter) {
+                    const pageCount = doc.bufferedPageRange().count;
+                    for (let i = 0; i < pageCount; i++) {
+                        doc.switchToPage(i);
+
+                        // Footer line
+                        doc.strokeColor('#CCCCCC')
+                            .lineWidth(0.5)
+                            .moveTo(60, 770)
+                            .lineTo(535, 770)
+                            .stroke();
+
+                        doc.fontSize(8)
+                            .fillColor('#666666')
+                            .font('Helvetica-Oblique')
+                            .text(`Page ${i + 1} of ${pageCount}`, 60, 780, { width: 475, align: 'center' });
+
+                        if (confidential) {
+                            doc.fontSize(8)
+                                .fillColor('#DC2626')
+                                .font('Helvetica-Bold')
+                                .text('CONFIDENTIAL', 60, 780, { width: 475, align: 'left' });
+                        }
+
+                        doc.fontSize(7)
+                            .fillColor('#999999')
+                            .font('Helvetica-Oblique')
+                            .text('Lucide AI Assistant', 60, 780, { width: 475, align: 'right' });
+                    }
+                }
+
+                doc.end();
+
+                stream.on('finish', () => {
+                    console.log(`[ExportService] Professional PDF created: ${filePath}`);
+                    resolve({
+                        success: true,
+                        filePath,
+                        format: 'pdf'
+                    });
+                });
+
+                stream.on('error', (error) => {
+                    reject(new Error(`Failed to write PDF: ${error.message}`));
+                });
+
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
 
     /**
