@@ -394,7 +394,13 @@ class AskService {
             }
             console.log(`[AskService] Using model: ${modelInfo.model} for provider: ${modelInfo.provider}`);
 
-            const screenshotResult = await captureScreenshot({ quality: 'medium' });
+            // Vérifier si les captures d'écran sont activées
+            const isScreenshotEnabled = getWindowManager().getScreenshotEnabled();
+            console.log(`[AskService] Screenshot capture is ${isScreenshotEnabled ? 'enabled' : 'disabled'}`);
+
+            const screenshotResult = isScreenshotEnabled
+                ? await captureScreenshot({ quality: 'medium' })
+                : { success: false, base64: null };
             const screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
 
             // Récupérer l'historique de la session actuelle depuis la DB

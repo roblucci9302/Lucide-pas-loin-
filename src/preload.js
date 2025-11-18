@@ -251,6 +251,8 @@ contextBridge.exposeInMainWorld('api', {
     setAutoUpdate: (isEnabled) => ipcRenderer.invoke('settings:set-auto-update', isEnabled),
     getContentProtectionStatus: () => ipcRenderer.invoke('get-content-protection-status'),
     toggleContentProtection: () => ipcRenderer.invoke('toggle-content-protection'),
+    getScreenshotEnabled: () => ipcRenderer.invoke('get-screenshot-enabled'),
+    setScreenshotEnabled: (enabled) => ipcRenderer.invoke('set-screenshot-enabled', enabled),
     getCurrentShortcuts: () => ipcRenderer.invoke('settings:getCurrentShortcuts'),
     openShortcutSettingsWindow: () => ipcRenderer.invoke('shortcut:openShortcutSettingsWindow'),
 
