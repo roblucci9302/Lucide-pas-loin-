@@ -18,7 +18,11 @@ export class TranscriptionViewer extends LitElement {
         activeTab: { type: String }, // 'transcript', 'insights', 'notes'
         isGenerating: { type: Boolean },
         selectedFormat: { type: String }, // 'markdown', 'pdf', 'docx'
-        selectedTemplate: { type: String } // 'meeting_minutes', 'phone_call_summary', etc.
+        selectedTemplate: { type: String }, // 'meeting_minutes', 'phone_call_summary', etc.
+        editingSegmentId: { type: String }, // Currently editing segment
+        editMode: { type: Boolean }, // Global edit mode toggle
+        speakersList: { type: Array }, // List of speakers with counts
+        canUndo: { type: Boolean } // Whether undo is available
     };
 
     static styles = css`
@@ -235,6 +239,142 @@ export class TranscriptionViewer extends LitElement {
             user-select: text;
         }
 
+        .segment-text[contenteditable="true"] {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(129, 140, 248, 0.3);
+            outline: none;
+        }
+
+        .segment-text[contenteditable="true"]:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(129, 140, 248, 0.5);
+        }
+
+        .segment-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        .segment:hover .segment-actions {
+            opacity: 1;
+        }
+
+        .segment-btn {
+            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .segment-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .segment-btn.save {
+            background: rgba(129, 140, 248, 0.15);
+            border-color: rgba(129, 140, 248, 0.3);
+            color: rgba(129, 140, 248, 0.9);
+        }
+
+        .segment-btn.save:hover {
+            background: rgba(129, 140, 248, 0.25);
+        }
+
+        .speaker-dropdown {
+            padding: 4px 8px;
+            background: rgba(129, 140, 248, 0.15);
+            border: 1px solid rgba(129, 140, 248, 0.3);
+            border-radius: 5px;
+            color: rgba(129, 140, 248, 0.9);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .speaker-dropdown:hover {
+            background: rgba(129, 140, 248, 0.25);
+        }
+
+        .edit-mode-btn {
+            padding: 8px 16px;
+            background: rgba(74, 222, 128, 0.15);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            border-radius: 8px;
+            color: rgba(74, 222, 128, 0.9);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .edit-mode-btn:hover {
+            background: rgba(74, 222, 128, 0.25);
+        }
+
+        .edit-mode-btn.active {
+            background: rgba(74, 222, 128, 0.3);
+            border-color: rgba(74, 222, 128, 0.5);
+        }
+
+        .undo-btn {
+            padding: 8px 16px;
+            background: rgba(251, 191, 36, 0.15);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 8px;
+            color: rgba(251, 191, 36, 0.9);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .undo-btn:hover:not(:disabled) {
+            background: rgba(251, 191, 36, 0.25);
+        }
+
+        .undo-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .merge-indicator {
+            display: flex;
+            justify-content: center;
+            margin: -8px 0;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        .segment:hover + .merge-indicator {
+            opacity: 1;
+        }
+
+        .merge-btn {
+            padding: 4px 12px;
+            background: rgba(129, 140, 248, 0.15);
+            border: 1px solid rgba(129, 140, 248, 0.3);
+            border-radius: 5px;
+            color: rgba(129, 140, 248, 0.9);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .merge-btn:hover {
+            background: rgba(129, 140, 248, 0.25);
+        }
+
         /* Insights View */
         .insights-list {
             display: flex;
@@ -322,6 +462,10 @@ export class TranscriptionViewer extends LitElement {
         this.isGenerating = false;
         this.selectedFormat = 'markdown'; // Default format
         this.selectedTemplate = 'meeting_minutes'; // Default template
+        this.editingSegmentId = null; // Currently editing segment
+        this.editMode = false; // Global edit mode toggle
+        this.speakersList = []; // List of speakers
+        this.canUndo = false; // Whether undo is available
     }
 
     render() {
@@ -348,6 +492,25 @@ export class TranscriptionViewer extends LitElement {
                         `}
 
                         <div class="header-actions">
+                            ${this.activeTab === 'transcript' ? html`
+                                <button
+                                    class="edit-mode-btn ${this.editMode ? 'active' : ''}"
+                                    @click="${this._toggleEditMode}"
+                                    title="Toggle edit mode"
+                                >
+                                    ✏️ ${this.editMode ? 'Done Editing' : 'Edit'}
+                                </button>
+
+                                <button
+                                    class="undo-btn"
+                                    @click="${this._handleUndo}"
+                                    ?disabled="${!this.canUndo}"
+                                    title="Undo last edit"
+                                >
+                                    ↶ Undo
+                                </button>
+                            ` : ''}
+
                             <select
                                 class="format-selector"
                                 .value="${this.selectedTemplate}"
@@ -463,14 +626,78 @@ export class TranscriptionViewer extends LitElement {
 
         return html`
             <div class="transcript-list">
-                ${segments.map(segment => html`
+                ${segments.map((segment, index) => html`
                     <div class="segment">
                         <div class="segment-time">${this.formatTimestamp(segment.start_at)}</div>
                         <div class="segment-content">
-                            <div class="segment-speaker">${segment.speaker}</div>
-                            <div class="segment-text">${segment.text}</div>
+                            <!-- Speaker (editable in edit mode) -->
+                            ${this.editMode ? html`
+                                <select
+                                    class="speaker-dropdown"
+                                    .value="${segment.speaker}"
+                                    @change="${e => this._handleSpeakerChange(segment.id, e.target.value)}"
+                                >
+                                    ${this._getSpeakerOptions(segment.speaker)}
+                                </select>
+                            ` : html`
+                                <div class="segment-speaker">${segment.speaker}</div>
+                            `}
+
+                            <!-- Text (editable when in editing mode) -->
+                            <div
+                                class="segment-text"
+                                contenteditable="${this.editingSegmentId === segment.id}"
+                                @blur="${e => this._handleTextBlur(segment.id, e)}"
+                                @keydown="${e => this._handleTextKeydown(segment.id, e)}"
+                            >${segment.text}</div>
+
+                            <!-- Edit Actions (shown in edit mode) -->
+                            ${this.editMode ? html`
+                                <div class="segment-actions">
+                                    ${this.editingSegmentId === segment.id ? html`
+                                        <button
+                                            class="segment-btn save"
+                                            @click="${e => this._saveSegmentEdit(segment.id, e)}"
+                                        >
+                                            💾 Save
+                                        </button>
+                                        <button
+                                            class="segment-btn"
+                                            @click="${() => this._cancelSegmentEdit(segment.id)}"
+                                        >
+                                            ✕ Cancel
+                                        </button>
+                                    ` : html`
+                                        <button
+                                            class="segment-btn"
+                                            @click="${() => this._startEditingSegment(segment.id)}"
+                                        >
+                                            ✏️ Edit Text
+                                        </button>
+                                        <button
+                                            class="segment-btn"
+                                            @click="${() => this._handleSplitSegment(segment.id)}"
+                                        >
+                                            ✂️ Split
+                                        </button>
+                                    `}
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
+
+                    <!-- Merge button between consecutive same-speaker segments -->
+                    ${this.editMode && index < segments.length - 1 && segments[index + 1].speaker === segment.speaker ? html`
+                        <div class="merge-indicator">
+                            <button
+                                class="merge-btn"
+                                @click="${() => this._handleMergeSegments(segment.id, segments[index + 1].id)}"
+                                title="Merge with next segment"
+                            >
+                                ⬇️ Merge with next
+                            </button>
+                        </div>
+                    ` : ''}
                 `)}
             </div>
         `;
@@ -561,6 +788,241 @@ export class TranscriptionViewer extends LitElement {
             }));
         }
         this.isEditing = false;
+    }
+
+    // ====== Edit Mode Management ======
+
+    async _toggleEditMode() {
+        this.editMode = !this.editMode;
+
+        if (this.editMode) {
+            // Load speakers list when entering edit mode
+            await this._loadSpeakers();
+        } else {
+            // Cancel any ongoing edits
+            this.editingSegmentId = null;
+        }
+    }
+
+    async _loadSpeakers() {
+        try {
+            const result = await window.api.invoke('transcription:get-speakers', {
+                transcriptionId: this.transcription.id
+            });
+
+            if (result.success) {
+                this.speakersList = result.speakers;
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error loading speakers:', error);
+        }
+    }
+
+    async _handleUndo() {
+        if (!this.canUndo) return;
+
+        try {
+            const result = await window.api.invoke('transcription:undo', {
+                transcriptionId: this.transcription.id
+            });
+
+            if (result.success) {
+                console.log('[TranscriptionViewer] Undo successful');
+                await this._refreshTranscription();
+
+                // Check if more undos are available
+                // For now, we'll disable after one undo (can be enhanced)
+                this.canUndo = false;
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error undoing:', error);
+        }
+    }
+
+    // ====== Segment Text Editing ======
+
+    _startEditingSegment(segmentId) {
+        this.editingSegmentId = segmentId;
+
+        // Focus the contenteditable element
+        setTimeout(() => {
+            const element = this.shadowRoot.querySelector(`[contenteditable="true"]`);
+            if (element) {
+                element.focus();
+                // Select all text
+                const range = document.createRange();
+                range.selectNodeContents(element);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        }, 100);
+    }
+
+    async _saveSegmentEdit(segmentId, event) {
+        const element = event.target.closest('.segment-content').querySelector('.segment-text');
+        const newText = element.innerText.trim();
+
+        if (!newText) {
+            alert('Segment text cannot be empty');
+            return;
+        }
+
+        try {
+            const result = await window.api.invoke('transcription:edit-segment', {
+                segmentId,
+                newText,
+                transcriptionId: this.transcription.id
+            });
+
+            if (result.success) {
+                console.log('[TranscriptionViewer] Segment updated');
+                this.editingSegmentId = null;
+                this.canUndo = true;
+                await this._refreshTranscription();
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error saving segment:', error);
+            alert('Failed to save segment: ' + error.message);
+        }
+    }
+
+    _cancelSegmentEdit(segmentId) {
+        this.editingSegmentId = null;
+        // Force re-render to restore original text
+        this.requestUpdate();
+    }
+
+    _handleTextBlur(segmentId, event) {
+        // Auto-save on blur (optional - can be disabled)
+        // For now, we'll just exit edit mode without saving
+        // Users must click Save button
+    }
+
+    _handleTextKeydown(segmentId, event) {
+        // Escape to cancel
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            this._cancelSegmentEdit(segmentId);
+        }
+        // Ctrl+Enter to save
+        else if (event.key === 'Enter' && event.ctrlKey) {
+            event.preventDefault();
+            this._saveSegmentEdit(segmentId, event);
+        }
+    }
+
+    // ====== Speaker Management ======
+
+    _getSpeakerOptions(currentSpeaker) {
+        const speakers = this.speakersList || [];
+
+        // Always include current speaker
+        const speakerSet = new Set([currentSpeaker, ...speakers.map(s => s.speaker)]);
+
+        return Array.from(speakerSet).map(speaker => html`
+            <option value="${speaker}">${speaker}</option>
+        `);
+    }
+
+    async _handleSpeakerChange(segmentId, newSpeaker) {
+        try {
+            // For now, we'll update just this segment
+            // In the future, could ask "Rename all segments with this speaker?"
+
+            const result = await window.api.invoke('transcription:edit-segment', {
+                segmentId,
+                newText: this.transcription.segments.find(s => s.id === segmentId).text,
+                transcriptionId: this.transcription.id
+            });
+
+            if (result.success) {
+                console.log('[TranscriptionViewer] Speaker changed');
+                this.canUndo = true;
+                await this._refreshTranscription();
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error changing speaker:', error);
+        }
+    }
+
+    // ====== Merge/Split Segments ======
+
+    async _handleMergeSegments(segmentId1, segmentId2) {
+        if (!confirm('Merge these two segments?')) {
+            return;
+        }
+
+        try {
+            const result = await window.api.invoke('transcription:merge-segments', {
+                segmentId1,
+                segmentId2,
+                transcriptionId: this.transcription.id
+            });
+
+            if (result.success) {
+                console.log('[TranscriptionViewer] Segments merged');
+                this.canUndo = true;
+                await this._refreshTranscription();
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error merging segments:', error);
+            alert('Failed to merge segments: ' + error.message);
+        }
+    }
+
+    async _handleSplitSegment(segmentId) {
+        const segment = this.transcription.segments.find(s => s.id === segmentId);
+        if (!segment) return;
+
+        // Simple split: ask user for position
+        const position = prompt(
+            `Enter character position to split at (0-${segment.text.length}):`,
+            Math.floor(segment.text.length / 2)
+        );
+
+        if (position === null) return;
+
+        const splitPosition = parseInt(position);
+        if (isNaN(splitPosition) || splitPosition <= 0 || splitPosition >= segment.text.length) {
+            alert('Invalid split position');
+            return;
+        }
+
+        try {
+            const result = await window.api.invoke('transcription:split-segment', {
+                segmentId,
+                splitPosition,
+                transcriptionId: this.transcription.id
+            });
+
+            if (result.success) {
+                console.log('[TranscriptionViewer] Segment split');
+                this.canUndo = true;
+                await this._refreshTranscription();
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error splitting segment:', error);
+            alert('Failed to split segment: ' + error.message);
+        }
+    }
+
+    // ====== Refresh Transcription ======
+
+    async _refreshTranscription() {
+        try {
+            const result = await window.api.invoke('transcription:get-by-id', {
+                transcriptionId: this.transcription.id,
+                includeSegments: true
+            });
+
+            if (result.success) {
+                this.transcription = result.transcription;
+                this.requestUpdate();
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error refreshing transcription:', error);
+        }
     }
 
     formatDate(timestamp) {
