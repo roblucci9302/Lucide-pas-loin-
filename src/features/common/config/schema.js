@@ -325,6 +325,96 @@ const LATEST_SCHEMA = {
             { name: 'sync_state', type: 'TEXT DEFAULT \'clean\'' }
         ]
     },
+    // Phase 6: Transcription Center - Advanced Transcription Management
+    transcriptions: {
+        columns: [
+            { name: 'id', type: 'TEXT PRIMARY KEY' },
+            { name: 'session_id', type: 'TEXT NOT NULL' },
+            { name: 'uid', type: 'TEXT NOT NULL' },
+            // Metadata
+            { name: 'title', type: 'TEXT' },
+            { name: 'description', type: 'TEXT' },
+            { name: 'duration', type: 'INTEGER' }, // in seconds
+            { name: 'participants', type: 'TEXT' }, // JSON array
+            { name: 'tags', type: 'TEXT' }, // JSON array
+            // Content
+            { name: 'summary', type: 'TEXT' },
+            { name: 'transcript_count', type: 'INTEGER DEFAULT 0' },
+            { name: 'word_count', type: 'INTEGER DEFAULT 0' },
+            // Timestamps
+            { name: 'start_at', type: 'INTEGER' },
+            { name: 'end_at', type: 'INTEGER' },
+            // Language & Status
+            { name: 'language', type: 'TEXT' },
+            { name: 'status', type: 'TEXT DEFAULT \'completed\'' },
+            // Metadata
+            { name: 'created_at', type: 'INTEGER' },
+            { name: 'updated_at', type: 'INTEGER' },
+            { name: 'sync_state', type: 'TEXT DEFAULT \'clean\'' }
+        ]
+    },
+    transcription_segments: {
+        columns: [
+            { name: 'id', type: 'TEXT PRIMARY KEY' },
+            { name: 'transcription_id', type: 'TEXT NOT NULL' },
+            // Speaker info
+            { name: 'speaker', type: 'TEXT NOT NULL' },
+            { name: 'speaker_label', type: 'TEXT' },
+            // Content
+            { name: 'text', type: 'TEXT NOT NULL' },
+            // Timing
+            { name: 'start_at', type: 'INTEGER NOT NULL' },
+            { name: 'end_at', type: 'INTEGER NOT NULL' },
+            { name: 'duration', type: 'INTEGER' },
+            // Quality
+            { name: 'confidence', type: 'REAL' },
+            { name: 'language', type: 'TEXT' },
+            // Metadata
+            { name: 'created_at', type: 'INTEGER' },
+            { name: 'sync_state', type: 'TEXT DEFAULT \'clean\'' }
+        ]
+    },
+    transcription_insights: {
+        columns: [
+            { name: 'id', type: 'TEXT PRIMARY KEY' },
+            { name: 'transcription_id', type: 'TEXT NOT NULL' },
+            // Insight type
+            { name: 'insight_type', type: 'TEXT NOT NULL' },
+            // Content
+            { name: 'title', type: 'TEXT' },
+            { name: 'content', type: 'TEXT NOT NULL' },
+            { name: 'metadata', type: 'TEXT' }, // JSON
+            // Generation info
+            { name: 'generated_at', type: 'INTEGER' },
+            { name: 'model', type: 'TEXT' },
+            { name: 'tokens_used', type: 'INTEGER' },
+            // Quality
+            { name: 'confidence', type: 'REAL' },
+            // Metadata
+            { name: 'created_at', type: 'INTEGER' },
+            { name: 'sync_state', type: 'TEXT DEFAULT \'clean\'' }
+        ]
+    },
+    transcription_notes: {
+        columns: [
+            { name: 'id', type: 'TEXT PRIMARY KEY' },
+            { name: 'transcription_id', type: 'TEXT NOT NULL' },
+            { name: 'uid', type: 'TEXT NOT NULL' },
+            // Note content
+            { name: 'note_text', type: 'TEXT NOT NULL' },
+            // Reference
+            { name: 'segment_id', type: 'TEXT' },
+            { name: 'timestamp_ref', type: 'INTEGER' },
+            // Tags
+            { name: 'tags', type: 'TEXT' }, // JSON array
+            { name: 'note_type', type: 'TEXT DEFAULT \'general\'' },
+            // Metadata
+            { name: 'created_by', type: 'TEXT' },
+            { name: 'created_at', type: 'INTEGER' },
+            { name: 'updated_at', type: 'INTEGER' },
+            { name: 'sync_state', type: 'TEXT DEFAULT \'clean\'' }
+        ]
+    },
     // Phase 3: Agent Improvement - Response Feedback
     response_feedback: {
         columns: [
