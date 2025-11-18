@@ -60,7 +60,6 @@
         "firebase": "^12.2.1",
         "firebase-admin": "^13.4.0",
         "jsonwebtoken": "^9.0.2",
-        "keytar": "^7.9.0",
         "mammoth": "^1.11.0",
         "node-fetch": "^2.7.0",
         "openai": "^4.70.0",
@@ -84,6 +83,7 @@
         "prettier": "^3.6.2"
     },
     "optionalDependencies": {
-        "electron-liquid-glass": "^1.0.1"
+        "electron-liquid-glass": "^1.0.1",
+        "keytar": "^7.9.0"
     }
 }
