@@ -31,6 +31,9 @@ const promptEngineeringService = require('../common/services/promptEngineeringSe
 const responseQualityService = require('../common/services/responseQualityService'); // Phase 3 - Agent Improvement
 const userLearningService = require('../common/services/userLearningService'); // Phase 2 - Long-term memory
 const personalKnowledgeBaseService = require('../common/services/personalKnowledgeBaseService'); // Phase 2 - Long-term memory
+const semanticCacheService = require('../common/services/semanticCacheService'); // Phase 3 - Performance & Optimization
+const modelSelectionService = require('../common/services/modelSelectionService'); // Phase 3 - Performance & Optimization
+const styleAdaptationService = require('../common/services/styleAdaptationService'); // Phase 3 - Performance & Optimization
 
 // Try to load sharp, but don't fail if it's not available
 let sharp;
@@ -345,6 +348,57 @@ class AskService {
             const activeProfile = agentProfileService.getCurrentProfile();
             console.log(`[AskService] Using agent profile: ${activeProfile}`);
 
+            // Phase 3: Performance - Check semantic cache before processing
+            if (userId) {
+                try {
+                    const cachedResult = await semanticCacheService.getCachedResponse(
+                        userPrompt,
+                        userId,
+                        activeProfile
+                    );
+
+                    if (cachedResult.hit) {
+                        console.log(`[AskService] 🎯 Cache HIT! Using cached response (similarity: ${Math.round(cachedResult.similarity * 100)}%)`);
+
+                        // Send cached response directly to UI
+                        const askWin = getWindowPool()?.get('ask');
+                        if (askWin && !askWin.isDestroyed()) {
+                            this.state.isLoading = false;
+                            this.state.isStreaming = false;
+                            this.state.currentResponse = cachedResult.response;
+                            this._broadcastState();
+
+                            // Save the cached response as assistant message
+                            await askRepository.addAiMessage({
+                                sessionId,
+                                role: 'assistant',
+                                content: cachedResult.response
+                            });
+
+                            // Update session metadata
+                            await conversationHistoryService.updateSessionMetadata(sessionId, {
+                                agent_profile: activeProfile
+                            });
+
+                            this.state.showTextInput = true;
+                            this._broadcastState();
+
+                            return {
+                                success: true,
+                                cached: true,
+                                similarity: cachedResult.similarity,
+                                source: cachedResult.source
+                            };
+                        }
+                    } else {
+                        console.log('[AskService] ❌ Cache MISS - Generating new response');
+                    }
+                } catch (cacheError) {
+                    console.warn('[AskService] Cache lookup failed (non-critical):', cacheError.message);
+                    // Continue with normal flow if cache fails
+                }
+            }
+
             // Update session metadata with agent profile
             await conversationHistoryService.updateSessionMetadata(sessionId, {
                 agent_profile: activeProfile
@@ -393,11 +447,40 @@ class AskService {
                 }
             }
 
+            // Phase 3: Performance - Intelligent model selection based on complexity
+            let selectedModel = null;
+            let complexityAnalysis = null;
+
+            try {
+                // Retrieve conversation history for complexity analysis
+                const previousMessagesForAnalysis = await conversationHistoryService.getSessionMessages(sessionId);
+
+                complexityAnalysis = modelSelectionService.analyzeAndSelect(userPrompt, {
+                    conversationHistory: previousMessagesForAnalysis.slice(-10), // Last 5 exchanges
+                    agentProfile: activeProfile,
+                    currentProvider: 'openai' // Default, will be overridden if available
+                });
+
+                selectedModel = complexityAnalysis.selection;
+                console.log(`[AskService] 🎯 Model Selection: ${selectedModel.tier} tier - ${selectedModel.model} (${selectedModel.reason})`);
+                console.log(`[AskService] 📊 Complexity: level=${complexityAnalysis.complexity.level}, score=${complexityAnalysis.complexity.score}, confidence=${Math.round(complexityAnalysis.complexity.confidence * 100)}%`);
+            } catch (modelSelectionError) {
+                console.warn('[AskService] Model selection failed (non-critical):', modelSelectionError.message);
+                // Continue with default model if selection fails
+            }
+
             const modelInfo = await modelStateService.getCurrentModelInfo('llm');
             if (!modelInfo || !modelInfo.apiKey) {
                 throw new Error('AI model or API key not configured.');
             }
-            console.log(`[AskService] Using model: ${modelInfo.model} for provider: ${modelInfo.provider}`);
+
+            // Override with selected model if available
+            if (selectedModel && selectedModel.model) {
+                console.log(`[AskService] Using optimized model: ${selectedModel.model} (was: ${modelInfo.model})`);
+                modelInfo.model = selectedModel.model;
+            } else {
+                console.log(`[AskService] Using default model: ${modelInfo.model} for provider: ${modelInfo.provider}`);
+            }
 
             // Vérifier si les captures d'écran sont activées
             const isScreenshotEnabled = getWindowManager().getScreenshotEnabled();
@@ -412,6 +495,20 @@ class AskService {
             const previousMessages = await conversationHistoryService.getSessionMessages(sessionId);
             console.log(`[AskService] 📝 Retrieved ${previousMessages.length} previous messages from session ${sessionId}`);
 
+            // Phase 3: Performance - Analyze user style preferences
+            let stylePreferences = null;
+            let styleInstructions = '';
+
+            if (userId) {
+                try {
+                    stylePreferences = await styleAdaptationService.analyzeUserPreferences(userId, 50);
+                    styleInstructions = styleAdaptationService.buildStyleInstructions(stylePreferences, activeProfile);
+                    console.log(`[AskService] 🎨 Style Adaptation: Analyzed user preferences (technical: ${stylePreferences.technicalLevel}, formality: ${stylePreferences.formalityLevel})`);
+                } catch (styleError) {
+                    console.warn('[AskService] Style adaptation failed (non-critical):', styleError.message);
+                }
+            }
+
             // Phase WOW 1 - Jour 5: Generate enriched prompt with prompt engineering service
             let systemPrompt;
             try {
@@ -424,6 +521,13 @@ class AskService {
                 });
 
                 systemPrompt = enrichedPrompt.systemPrompt;
+
+                // Phase 3: Inject style instructions into system prompt
+                if (styleInstructions && styleInstructions.length > 0) {
+                    systemPrompt += styleInstructions;
+                    console.log(`[AskService] 🎨 Style instructions injected into prompt`);
+                }
+
                 console.log(`[AskService] 🎯 Prompt Engineering: Generated enriched prompt for ${activeProfile} (temp: ${enrichedPrompt.temperature})`);
 
                 // Log metadata for debugging
@@ -435,6 +539,11 @@ class AskService {
                 // Fallback to original system prompt generation
                 const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
                 systemPrompt = getSystemPrompt(activeProfile, conversationHistory, false);
+
+                // Still inject style instructions in fallback
+                if (styleInstructions && styleInstructions.length > 0) {
+                    systemPrompt += styleInstructions;
+                }
             }
 
             // Phase 4: RAG - Enrich system prompt with knowledge base context
@@ -660,6 +769,25 @@ class AskService {
                         } catch (citationError) {
                             console.warn('[AskService] RAG: Error tracking citations:', citationError);
                             // Non-critical error, don't fail the whole operation
+                        }
+                    }
+
+                    // Phase 3: Performance - Cache successful response for future reuse
+                    if (metadata.userId && metadata.question && fullResponse.length > 50) {
+                        try {
+                            const estimatedTokens = Math.round((metadata.question.length + fullResponse.length) / 4);
+                            await semanticCacheService.setCachedResponse({
+                                question: metadata.question,
+                                response: fullResponse,
+                                userId: metadata.userId,
+                                agentProfile: metadata.agentProfile || 'lucide_assistant',
+                                model: metadata.model || 'unknown',
+                                provider: metadata.provider || 'unknown',
+                                tokensUsed: estimatedTokens
+                            });
+                            console.log(`[AskService] ✅ Response cached for future reuse`);
+                        } catch (cacheError) {
+                            console.warn('[AskService] Response caching failed (non-critical):', cacheError.message);
                         }
                     }
 

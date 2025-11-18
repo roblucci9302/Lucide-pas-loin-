@@ -14,6 +14,7 @@ const profileBridge = require('./modules/profileBridge');
 const promptBridge = require('./modules/promptBridge'); // Phase WOW 1 - Jour 5
 const feedbackBridge = require('./modules/feedbackBridge'); // Phase 3 - Agent Improvement
 const memoryBridge = require('./modules/memoryBridge'); // Phase 2 - Long-term memory
+const performanceBridge = require('./modules/performanceBridge'); // Phase 3 - Performance & Optimization
 
 module.exports = {
     /**
@@ -34,6 +35,7 @@ module.exports = {
         promptBridge.initialize(); // Phase WOW 1 - Jour 5
         feedbackBridge.initialize(); // Phase 3 - Agent Improvement
         memoryBridge.initialize(); // Phase 2 - Long-term memory
+        performanceBridge.initialize(); // Phase 3 - Performance & Optimization
 
         console.log('[FeatureBridge] All bridges initialized successfully');
     },
