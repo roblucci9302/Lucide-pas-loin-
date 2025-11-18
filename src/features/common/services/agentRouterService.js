@@ -90,6 +90,72 @@ class AgentRouterService {
                 confidence: 0.91
             },
             {
+                agent: 'student_assistant',
+                keywords: [
+                    // French keywords - Cours & Études
+                    'cours', 'leçon', 'chapitre', 'matière', 'discipline',
+                    'devoir', 'devoirs', 'exercice', 'exercices', 'problème', 'énoncé',
+                    'td', 'tp', 'travaux dirigés', 'travaux pratiques', 'cm',
+                    // Examens
+                    'examen', 'partiel', 'partiels', 'contrôle', 'test', 'évaluation',
+                    'concours', 'oral', 'écrit', 'qcm', 'révision', 'révisions',
+                    'préparation', 'bachotage', 'annales', 'corrigé',
+                    // Méthodologie
+                    'méthode', 'méthodologie', 'organisation', 'planification',
+                    'fiche', 'fiche de révision', 'prise de notes', 'synthèse',
+                    'résumé', 'mind map', 'carte mentale', 'flashcards',
+                    // Rédaction
+                    'mémoire', 'rapport', 'dissertation', 'commentaire', 'exposé',
+                    'présentation', 'soutenance', 'bibliographie',
+                    'introduction', 'conclusion', 'plan', 'problématique',
+                    // Niveaux
+                    'lycée', 'terminale', 'bac', 'licence', 'l1', 'l2', 'l3',
+                    'master', 'm1', 'm2', 'université', 'fac', 'prépa',
+                    // Compétences
+                    'comprendre', 'apprendre', 'mémoriser', 'retenir',
+                    'concentration', 'stress étudiant', 'blocage',
+                    // English keywords
+                    'homework', 'assignment', 'exam', 'test', 'study',
+                    'revision', 'notes', 'essay', 'presentation', 'student'
+                ],
+                confidence: 0.90
+            },
+            {
+                agent: 'researcher_assistant',
+                keywords: [
+                    // French keywords - Méthodologie
+                    'recherche', 'méthodologie', 'protocole', 'expérience', 'étude',
+                    'hypothèse', 'question de recherche', 'problématique recherche',
+                    'qualitatif', 'quantitatif', 'mixte', 'empirique',
+                    'échantillon', 'population', 'randomisation',
+                    // Littérature
+                    'revue de littérature', 'état de l\'art', 'bibliographie',
+                    'citation', 'référence', 'scopus', 'web of science',
+                    'pubmed', 'google scholar', 'doi', 'impact factor',
+                    // Publications
+                    'article', 'publication', 'journal', 'peer review',
+                    'reviewer', 'révision', 'soumission', 'acceptation',
+                    'rejet', 'major revision', 'minor revision', 'manuscript',
+                    'abstract', 'imrad', 'résultats',
+                    // Statistiques
+                    'analyse', 'statistique', 'p-value', 'significatif',
+                    'corrélation', 'régression', 'anova',
+                    'données', 'data', 'dataset', 'variables',
+                    // Projets & Financements
+                    'anr', 'h2020', 'horizon', 'erc', 'grant',
+                    'financement', 'subvention', 'projet de recherche',
+                    // Thèse
+                    'thèse', 'doctorat', 'phd', 'docteur', 'doctorant',
+                    'directeur de thèse', 'comité de suivi', 'jury',
+                    'rapporteur', 'monographie',
+                    // English keywords
+                    'research', 'methodology', 'hypothesis', 'literature review',
+                    'publication', 'paper', 'journal', 'peer review',
+                    'thesis', 'dissertation', 'phd', 'grant', 'funding'
+                ],
+                confidence: 0.90
+            },
+            {
                 agent: 'hr_specialist',
                 keywords: [
                     // French keywords
@@ -169,6 +235,8 @@ class AgentRouterService {
                 ceo_advisor: 0,
                 sales_expert: 0,
                 manager_coach: 0,
+                student_assistant: 0,
+                researcher_assistant: 0,
                 hr_specialist: 0,
                 it_expert: 0,
                 marketing_expert: 0
@@ -449,6 +517,8 @@ Reply with ONLY the category ID (one of: hr_specialist, it_expert, marketing_exp
                 ceo_advisor: 0,
                 sales_expert: 0,
                 manager_coach: 0,
+                student_assistant: 0,
+                researcher_assistant: 0,
                 hr_specialist: 0,
                 it_expert: 0,
                 marketing_expert: 0
@@ -514,6 +584,8 @@ Reply with ONLY the category ID (one of: hr_specialist, it_expert, marketing_exp
             ceo_advisor: 'Cette question concerne la stratégie, la gouvernance ou le leadership exécutif',
             sales_expert: 'Cette question concerne la vente, la prospection ou le pipeline commercial',
             manager_coach: 'Cette question concerne le management, le feedback ou la gestion d\'équipe',
+            student_assistant: 'Cette question concerne les études, les devoirs ou la méthodologie académique',
+            researcher_assistant: 'Cette question concerne la recherche scientifique, les publications ou les projets de recherche',
             hr_specialist: 'Cette question concerne le recrutement, les RH ou la gestion des employés',
             it_expert: 'Cette question concerne le développement, le code ou l\'infrastructure technique',
             marketing_expert: 'Cette question concerne le marketing, les campagnes ou le contenu'

@@ -56,6 +56,20 @@ class AgentProfileService {
                 description: 'Coach pour management d\'équipe et leadership',
                 icon: '👥',
                 color: '#ef4444'
+            },
+            {
+                id: 'student_assistant',
+                name: 'Lucy - Assistant Étudiant',
+                description: 'Assistant pour les études, devoirs et méthodologie',
+                icon: '🎓',
+                color: '#3b82f6'
+            },
+            {
+                id: 'researcher_assistant',
+                name: 'Lucy - Assistant Recherche',
+                description: 'Assistant pour la recherche scientifique et publications',
+                icon: '🔬',
+                color: '#7c3aed'
             }
         ];
     }
