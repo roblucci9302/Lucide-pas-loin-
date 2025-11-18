@@ -6,6 +6,8 @@
 const { ipcMain } = require('electron');
 const transcriptionService = require('../../features/listen/transcription/transcriptionService');
 const meetingReportService = require('../../features/listen/transcription/meetingReportService');
+const autoTranscriptionService = require('../../features/listen/transcription/autoTranscriptionService');
+const transcriptionEditService = require('../../features/listen/transcription/transcriptionEditService');
 const sttRepository = require('../../features/listen/stt/repositories');
 const sessionRepository = require('../../features/common/repositories/session');
 
@@ -441,6 +443,316 @@ module.exports = {
             }
         });
 
-        console.log('[TranscriptionBridge] IPC handlers initialized successfully (13 handlers)');
+        // ====== Auto-Transcription ======
+
+        /**
+         * Handle session end - auto-create transcription
+         * @param {string} sessionId - Session ID
+         * @returns {Object} Created transcription or null
+         */
+        ipcMain.handle('transcription:auto-create-on-session-end', async (event, { sessionId }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const transcription = await autoTranscriptionService.handleSessionEnd(sessionId, userId);
+
+                return {
+                    success: true,
+                    transcription
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error auto-creating transcription:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Manually create transcription from session
+         * @param {string} sessionId - Session ID
+         * @param {Object} options - Additional options
+         * @returns {Object} Created transcription
+         */
+        ipcMain.handle('transcription:create-manual', async (event, { sessionId, options = {} }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const transcription = await autoTranscriptionService.createManual(sessionId, userId, options);
+
+                return {
+                    success: true,
+                    transcription
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error creating manual transcription:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Batch create transcriptions for past sessions
+         * @param {number} limit - Number of sessions to process
+         * @returns {Object} Results
+         */
+        ipcMain.handle('transcription:batch-create', async (event, { limit = 10 }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const transcriptions = await autoTranscriptionService.batchCreate(userId, limit);
+
+                return {
+                    success: true,
+                    transcriptions,
+                    count: transcriptions.length
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error batch creating transcriptions:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Enable/disable auto-transcription
+         * @param {boolean} enabled
+         * @returns {Object} Success status
+         */
+        ipcMain.handle('transcription:set-auto-enabled', async (event, { enabled }) => {
+            try {
+                autoTranscriptionService.setEnabled(enabled);
+
+                return {
+                    success: true,
+                    enabled
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error setting auto-transcription:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        // ====== Editing (Phase 6.3) ======
+
+        /**
+         * Update segment text
+         * @param {string} segmentId - Segment ID
+         * @param {string} newText - New text
+         * @param {string} transcriptionId - Transcription ID
+         * @returns {Object} Updated segment
+         */
+        ipcMain.handle('transcription:edit-segment', async (event, { segmentId, newText, transcriptionId }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const segment = transcriptionEditService.updateSegmentText(segmentId, newText, transcriptionId);
+
+                return {
+                    success: true,
+                    segment
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error editing segment:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Merge two segments
+         * @param {string} segmentId1 - First segment ID
+         * @param {string} segmentId2 - Second segment ID
+         * @param {string} transcriptionId - Transcription ID
+         * @returns {Object} Merged segment
+         */
+        ipcMain.handle('transcription:merge-segments', async (event, { segmentId1, segmentId2, transcriptionId }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const segment = transcriptionEditService.mergeSegments(segmentId1, segmentId2, transcriptionId);
+
+                return {
+                    success: true,
+                    segment
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error merging segments:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Split a segment
+         * @param {string} segmentId - Segment ID
+         * @param {number} splitPosition - Position to split at
+         * @param {string} transcriptionId - Transcription ID
+         * @returns {Array} Two new segments
+         */
+        ipcMain.handle('transcription:split-segment', async (event, { segmentId, splitPosition, transcriptionId }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const segments = transcriptionEditService.splitSegment(segmentId, splitPosition, transcriptionId);
+
+                return {
+                    success: true,
+                    segments
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error splitting segment:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Rename a speaker
+         * @param {string} transcriptionId - Transcription ID
+         * @param {string} oldName - Old speaker name
+         * @param {string} newName - New speaker name
+         * @returns {number} Number of segments updated
+         */
+        ipcMain.handle('transcription:rename-speaker', async (event, { transcriptionId, oldName, newName }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const count = transcriptionEditService.renameSpeaker(transcriptionId, oldName, newName);
+
+                return {
+                    success: true,
+                    count
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error renaming speaker:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Merge two speakers
+         * @param {string} transcriptionId - Transcription ID
+         * @param {string} speaker1 - Primary speaker
+         * @param {string} speaker2 - Secondary speaker (will be merged into speaker1)
+         * @returns {number} Number of segments updated
+         */
+        ipcMain.handle('transcription:merge-speakers', async (event, { transcriptionId, speaker1, speaker2 }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const count = transcriptionEditService.mergeSpeakers(transcriptionId, speaker1, speaker2);
+
+                return {
+                    success: true,
+                    count
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error merging speakers:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Undo last edit
+         * @param {string} transcriptionId - Transcription ID
+         * @returns {Object} Undone action or null
+         */
+        ipcMain.handle('transcription:undo', async (event, { transcriptionId }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const action = transcriptionEditService.undo(transcriptionId);
+
+                return {
+                    success: true,
+                    action
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error undoing:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Get speakers list
+         * @param {string} transcriptionId - Transcription ID
+         * @returns {Array} List of speakers
+         */
+        ipcMain.handle('transcription:get-speakers', async (event, { transcriptionId }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const speakers = transcriptionEditService.getSpeakers(transcriptionId);
+                const counts = transcriptionEditService.getSegmentCountBySpeaker(transcriptionId);
+
+                return {
+                    success: true,
+                    speakers,
+                    counts
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error getting speakers:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        console.log('[TranscriptionBridge] IPC handlers initialized successfully (24 handlers)');
     }
 };

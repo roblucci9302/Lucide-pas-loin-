@@ -412,14 +412,15 @@ export class TranscriptionCenter extends LitElement {
     }
 
     async _handleGenerateMinutes(e) {
-        const { transcriptionId } = e.detail;
+        const { transcriptionId, format = 'markdown', templateId = 'meeting_minutes' } = e.detail;
 
         try {
             const result = await window.api.invoke('transcription:generate-meeting-minutes', {
                 transcriptionId,
                 options: {
-                    format: 'markdown',
-                    language: 'en'
+                    format,
+                    language: 'en',
+                    templateId
                 }
             });
 
