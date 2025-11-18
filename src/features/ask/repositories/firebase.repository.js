@@ -1,4 +1,4 @@
-const { collection, addDoc, query, getDocs, orderBy, Timestamp } = require('firebase/firestore');
+const { collection, addDoc, query, getDocs, orderBy, Timestamp, doc, updateDoc } = require('firebase/firestore');
 const { getFirestoreInstance } = require('../../common/services/firebaseClient');
 const { createEncryptedConverter } = require('../../common/repositories/firestoreConverter');
 
@@ -32,7 +32,22 @@ async function getAllAiMessagesBySessionId(sessionId) {
     return querySnapshot.docs.map(doc => doc.data());
 }
 
+// 🆕 PHASE 3: Update an existing AI message (for continuation feature)
+async function updateAiMessage({ sessionId, messageId, content }) {
+    const db = getFirestoreInstance();
+    const messageRef = doc(db, `sessions/${sessionId}/ai_messages/${messageId}`).withConverter(aiMessageConverter);
+
+    try {
+        await updateDoc(messageRef, { content });
+        return { success: true };
+    } catch (err) {
+        console.error('Firebase: Failed to update AI message:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     addAiMessage,
     getAllAiMessagesBySessionId,
+    updateAiMessage
 }; 

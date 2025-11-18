@@ -22,7 +22,22 @@ function getAllAiMessagesBySessionId(sessionId) {
     return db.prepare(query).all(sessionId);
 }
 
+// 🆕 PHASE 3: Update an existing AI message (for continuation feature)
+function updateAiMessage({ messageId, content }) {
+    const db = sqliteClient.getDb();
+    const query = `UPDATE ai_messages SET content = ? WHERE id = ?`;
+
+    try {
+        const result = db.prepare(query).run(content, messageId);
+        return { success: result.changes > 0, changes: result.changes };
+    } catch (err) {
+        console.error('SQLite: Failed to update AI message:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     addAiMessage,
-    getAllAiMessagesBySessionId
+    getAllAiMessagesBySessionId,
+    updateAiMessage
 }; 

@@ -182,6 +182,15 @@ module.exports = {
                 return { success: false, error: error.message };
             }
         });
+        // 🆕 PHASE 3: Continue Generation
+        ipcMain.handle('ask:continueGeneration', async (event, userInstruction = '') => {
+            try {
+                return await askService.continueGeneration(userInstruction);
+            } catch (error) {
+                console.error('[ConversationBridge] ask:continueGeneration failed', error.message);
+                return { success: false, error: error.message };
+            }
+        });
 
         // Listen Feature
         ipcMain.handle('listen:sendMicAudio', async (event, { data, mimeType }) => await listenService.handleSendMicAudioContent(data, mimeType));
