@@ -12,6 +12,7 @@ const authPermissionsBridge = require('./modules/authPermissionsBridge');
 const eventsBridge = require('./modules/eventsBridge');
 const profileBridge = require('./modules/profileBridge');
 const promptBridge = require('./modules/promptBridge'); // Phase WOW 1 - Jour 5
+const feedbackBridge = require('./modules/feedbackBridge'); // Phase 3 - Agent Improvement
 
 module.exports = {
     /**
@@ -30,6 +31,7 @@ module.exports = {
         eventsBridge.initialize();
         profileBridge.initialize();
         promptBridge.initialize(); // Phase WOW 1 - Jour 5
+        feedbackBridge.initialize(); // Phase 3 - Agent Improvement
 
         console.log('[FeatureBridge] All bridges initialized successfully');
     },

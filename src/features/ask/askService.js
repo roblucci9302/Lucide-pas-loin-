@@ -28,6 +28,7 @@ const conversationHistoryService = require('../common/services/conversationHisto
 const documentService = require('../common/services/documentService');
 const ragService = require('../common/services/ragService');
 const promptEngineeringService = require('../common/services/promptEngineeringService'); // Phase WOW 1 - Jour 5
+const responseQualityService = require('../common/services/responseQualityService'); // Phase 3 - Agent Improvement
 
 // Try to load sharp, but don't fail if it's not available
 let sharp;
@@ -289,6 +290,8 @@ class AskService {
         this.abortController = new AbortController();
         const { signal } = this.abortController;
 
+        // Track response time for quality metrics
+        const responseStartTime = Date.now();
 
         let sessionId;
 
@@ -509,7 +512,14 @@ class AskService {
                     reader.cancel(signal.reason).catch(() => { /* 이미 취소된 경우의 오류는 무시 */ });
                 });
 
-                await this._processStream(reader, askWin, sessionId, signal, ragSources);
+                await this._processStream(reader, askWin, sessionId, signal, ragSources, {
+                    question: userPrompt,
+                    agentProfile: activeProfile,
+                    userId: userId,
+                    model: modelInfo.model,
+                    provider: modelInfo.provider,
+                    responseStartTime: responseStartTime
+                });
                 return { success: true };
 
             } catch (multimodalError) {
@@ -541,7 +551,14 @@ class AskService {
                         fallbackReader.cancel(signal.reason).catch(() => {});
                     });
 
-                    await this._processStream(fallbackReader, askWin, sessionId, signal, ragSources);
+                    await this._processStream(fallbackReader, askWin, sessionId, signal, ragSources, {
+                        question: userPrompt,
+                        agentProfile: activeProfile,
+                        userId: userId,
+                        model: modelInfo.model,
+                        provider: modelInfo.provider,
+                        responseStartTime: responseStartTime
+                    });
                     return { success: true };
                 } else {
                     // 다른 종류의 에러이거나 스크린샷이 없었다면 그대로 throw
@@ -570,15 +587,17 @@ class AskService {
     }
 
     /**
-     * 
+     *
      * @param {ReadableStreamDefaultReader} reader
      * @param {BrowserWindow} askWin
-     * @param {number} sessionId 
+     * @param {number} sessionId
      * @param {AbortSignal} signal
+     * @param {Array} ragSources - RAG sources used
+     * @param {Object} metadata - Metadata for quality evaluation
      * @returns {Promise<void>}
      * @private
      */
-    async _processStream(reader, askWin, sessionId, signal, ragSources = []) {
+    async _processStream(reader, askWin, sessionId, signal, ragSources = [], metadata = {}) {
         const decoder = new TextDecoder();
         let fullResponse = '';
 
@@ -640,6 +659,34 @@ class AskService {
                             console.warn('[AskService] RAG: Error tracking citations:', citationError);
                             // Non-critical error, don't fail the whole operation
                         }
+                    }
+
+                    // Phase 3: Agent Improvement - Evaluate response quality automatically
+                    try {
+                        const messageId = messageRecord?.id || null;
+                        const latencyMs = Date.now() - (metadata.responseStartTime || Date.now());
+
+                        const qualityMetrics = await responseQualityService.evaluateResponse({
+                            userId: metadata.userId || 'default_user',
+                            sessionId: sessionId,
+                            messageId: messageId,
+                            agentProfile: metadata.agentProfile || 'lucide_assistant',
+                            question: metadata.question || '',
+                            response: fullResponse,
+                            latencyMs: latencyMs,
+                            tokensInput: 0, // TODO: Track from AI provider
+                            tokensOutput: 0, // TODO: Track from AI provider
+                            sourcesUsed: ragSources?.length || 0,
+                            cacheHit: false, // TODO: Implement cache detection
+                            model: metadata.model || 'unknown',
+                            provider: metadata.provider || 'unknown',
+                            temperature: 0.7
+                        });
+
+                        console.log(`[AskService] 📊 Quality evaluation: ${Math.round(qualityMetrics.overallScore * 100)}% (length: ${Math.round(qualityMetrics.lengthScore * 100)}%, structure: ${Math.round(qualityMetrics.structureScore * 100)}%, vocab: ${Math.round(qualityMetrics.vocabularyScore * 100)}%)`);
+                    } catch (qualityError) {
+                        console.warn('[AskService] Quality evaluation failed (non-critical):', qualityError);
+                        // Non-critical error, don't fail the whole operation
                     }
                 } catch(dbError) {
                     console.error("[AskService] DB: Failed to save assistant response after stream ended:", dbError);
