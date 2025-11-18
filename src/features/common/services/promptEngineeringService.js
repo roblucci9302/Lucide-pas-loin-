@@ -14,13 +14,19 @@
  */
 
 const PROFILE_TEMPLATES = require('../prompts/profileTemplates');
+const { profilePromptsV2 } = require('../prompts/promptTemplatesV2'); // Phase 4: Optimized prompts
+const promptOptimizationService = require('./promptOptimizationService'); // Phase 4: Advanced techniques
 const userContextService = require('./userContextService');
 const conversationHistoryService = require('./conversationHistoryService');
+const userLearningService = require('./userLearningService'); // Phase 2: Long-term memory
+const personalKnowledgeBaseService = require('./personalKnowledgeBaseService'); // Phase 2: Long-term memory
 
 class PromptEngineeringService {
     constructor() {
         this.templates = PROFILE_TEMPLATES;
+        this.promptsV2 = profilePromptsV2; // Phase 4: Optimized prompts
         this.defaultProfile = 'lucide_assistant';
+        this.useV2Prompts = true; // Phase 4: Enable V2 by default
     }
 
     /**
@@ -57,6 +63,25 @@ class PromptEngineeringService {
                 conversationContext = await this.getConversationContext(sessionId, uid);
             }
 
+            // 3b. Phase 2: Get personalized context from learning (user profile enrichment)
+            let personalizedContext = '';
+            try {
+                personalizedContext = await userLearningService.generatePersonalizedContext(uid);
+            } catch (learningError) {
+                console.warn('[PromptEngineering] Could not retrieve personalized context:', learningError.message);
+            }
+
+            // 3c. Phase 2: Get long-term memory context (semantic search in past conversations)
+            let longTermContext = null;
+            try {
+                longTermContext = await personalKnowledgeBaseService.retrieveLongTermContext(question, uid, {
+                    topK: 3,
+                    minScore: 0.75
+                });
+            } catch (memoryError) {
+                console.warn('[PromptEngineering] Could not retrieve long-term context:', memoryError.message);
+            }
+
             // 4. Detect question type and complexity
             const questionAnalysis = this.analyzeQuestion(question);
 
@@ -65,6 +90,8 @@ class PromptEngineeringService {
                 template,
                 userContext,
                 conversationContext,
+                personalizedContext, // Phase 2
+                longTermContext, // Phase 2
                 questionAnalysis,
                 customContext
             });
@@ -99,7 +126,10 @@ class PromptEngineeringService {
                     questionType: questionAnalysis.type,
                     complexity: questionAnalysis.complexity,
                     hasContext: !!userContext,
-                    hasConversationHistory: !!conversationContext
+                    hasConversationHistory: !!conversationContext,
+                    hasPersonalizedContext: !!personalizedContext, // Phase 2
+                    hasLongTermMemory: longTermContext?.hasContext || false, // Phase 2
+                    longTermMemorySources: longTermContext?.sources?.length || 0 // Phase 2
                 }
             };
         } catch (error) {
@@ -110,11 +140,81 @@ class PromptEngineeringService {
 
     /**
      * Get template for a profile
+     * Phase 4: Returns V2 optimized prompts when available, falls back to V1
      * @param {string} profileId - Profile ID
      * @returns {Object|null} Template
      */
     getTemplate(profileId) {
+        // Phase 4: Try V2 optimized prompts first
+        if (this.useV2Prompts && this.promptsV2[profileId]) {
+            const v2Prompt = this.promptsV2[profileId];
+            console.log(`[PromptEngineering] Using V2 optimized prompt for ${profileId}`);
+
+            // Build complete V2 prompt with advanced techniques
+            return {
+                systemPrompt: this.buildV2SystemPrompt(v2Prompt),
+                temperature: v2Prompt.temperature || 0.7,
+                examples: v2Prompt.fewShotExamples ? [v2Prompt.fewShotExamples] : [],
+                outputStructure: {
+                    formats: {},
+                    constraints: {}
+                }
+            };
+        }
+
+        // Fallback to V1 template
         return this.templates[profileId] || null;
+    }
+
+    /**
+     * Build complete V2 system prompt with all optimizations
+     * Phase 4: Assembles V2 prompt components
+     * @param {Object} v2Prompt - V2 prompt data
+     * @returns {string} Complete system prompt
+     */
+    buildV2SystemPrompt(v2Prompt) {
+        let systemPrompt = v2Prompt.intro || '';
+
+        // Add thinking protocol (Chain-of-Thought)
+        if (v2Prompt.thinkingProtocol) {
+            systemPrompt += '\n\n' + v2Prompt.thinkingProtocol;
+        }
+
+        // Add few-shot examples
+        if (v2Prompt.fewShotExamples) {
+            systemPrompt += '\n\n' + v2Prompt.fewShotExamples;
+        }
+
+        // Add marketing frameworks (if marketing_expert)
+        if (v2Prompt.frameworks) {
+            systemPrompt += '\n\n' + v2Prompt.frameworks;
+        }
+
+        // Add channel specifics (if marketing_expert)
+        if (v2Prompt.channelSpecifics) {
+            systemPrompt += '\n\n' + v2Prompt.channelSpecifics;
+        }
+
+        // Add engineering principles (if it_expert)
+        if (v2Prompt.principles) {
+            systemPrompt += '\n\n' + v2Prompt.principles;
+        }
+
+        // Add format requirements
+        if (v2Prompt.formatRequirements) {
+            systemPrompt += '\n\n' + v2Prompt.formatRequirements;
+        }
+
+        // Add meta-instructions (how to be an excellent assistant)
+        const metaInstructions = promptOptimizationService.getMetaPromptInstructions();
+        systemPrompt += '\n\n' + metaInstructions;
+
+        // Add output instructions (final guidelines)
+        if (v2Prompt.outputInstructions) {
+            systemPrompt += '\n\n' + v2Prompt.outputInstructions;
+        }
+
+        return systemPrompt;
     }
 
     /**
@@ -183,6 +283,8 @@ class PromptEngineeringService {
         template,
         userContext,
         conversationContext,
+        personalizedContext,
+        longTermContext,
         questionAnalysis,
         customContext
     }) {
@@ -196,9 +298,19 @@ class PromptEngineeringService {
             }
         }
 
+        // Phase 2: Add personalized context from learning (user profile auto-learning)
+        if (personalizedContext && personalizedContext.length > 0) {
+            prompt += personalizedContext; // Already formatted by userLearningService
+        }
+
         // Add conversation context if available
         if (conversationContext) {
             prompt += `\n\n**Contexte Conversation:**\n${conversationContext}`;
+        }
+
+        // Phase 2: Add long-term memory context (semantic search in history)
+        if (longTermContext && longTermContext.hasContext) {
+            prompt += longTermContext.contextText; // Already formatted by personalKnowledgeBaseService
         }
 
         // Add output structure guidance
