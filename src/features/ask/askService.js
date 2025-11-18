@@ -34,6 +34,7 @@ const personalKnowledgeBaseService = require('../common/services/personalKnowled
 const semanticCacheService = require('../common/services/semanticCacheService'); // Phase 3 - Performance & Optimization
 const modelSelectionService = require('../common/services/modelSelectionService'); // Phase 3 - Performance & Optimization
 const styleAdaptationService = require('../common/services/styleAdaptationService'); // Phase 3 - Performance & Optimization
+const chunkedGenerationService = require('../common/services/chunkedGenerationService'); // Phase 2 - Chunked Generation
 
 // Try to load sharp, but don't fail if it's not available
 let sharp;
@@ -590,6 +591,87 @@ class AskService {
                 } catch (enrichError) {
                     console.warn('[AskService] RAG: Error enriching prompt, using base prompt:', enrichError);
                     // Continue with base prompt if enrichment fails
+                }
+            }
+
+            // 🆕 PHASE 2: CHUNKED GENERATION - Detect if we need chunking for long documents
+            const chunkedGenService = chunkedGenerationService.getInstance();
+            const needsChunking = chunkedGenService.shouldUseChunking(userPrompt, targetLength);
+
+            if (needsChunking) {
+                console.log('[AskService] 📚 Long document detected - using chunked generation');
+
+                // Broadcast initial state
+                this.state.isLoading = false;
+                this.state.isStreaming = true;
+                this.state.currentResponse = '📋 **Génération de document en cours...**\n\nAnalyse de votre demande et création de la structure...';
+                this._broadcastState();
+
+                // Generate document with progress updates
+                const askWin = getWindowPool()?.get('ask');
+                let fullDocument = '';
+
+                try {
+                    const result = await chunkedGenService.generateDocument(
+                        userPrompt,
+                        modelInfo,
+                        systemPrompt,
+                        (progressUpdate) => {
+                            // Update UI with progress
+                            if (progressUpdate.stage === 'outline') {
+                                this.state.currentResponse = '📋 **Génération de document en cours...**\n\nCréation de la structure du document...';
+                            } else if (progressUpdate.stage === 'introduction') {
+                                this.state.currentResponse = `📋 **Structure créée !**\n\n${progressUpdate.outline.sections.length} sections identifiées\n\nGénération de l'introduction...`;
+                            } else if (progressUpdate.stage === 'section') {
+                                fullDocument = fullDocument || `# ${progressUpdate.outline?.title || 'Document'}\n\n`;
+                                this.state.currentResponse = `📝 **Section ${progressUpdate.currentSection}/${progressUpdate.totalSections}**\n\n${progressUpdate.sectionTitle}\n\nGénération en cours... (${progressUpdate.progress}%)`;
+                            } else if (progressUpdate.stage === 'conclusion') {
+                                this.state.currentResponse = '🎯 **Rédaction de la conclusion...**\n\nSynthèse finale et recommandations...';
+                            } else if (progressUpdate.stage === 'complete') {
+                                this.state.currentResponse = '✅ **Document terminé !**';
+                            }
+
+                            this._broadcastState();
+
+                            // Also send to window if available
+                            if (askWin && !askWin.isDestroyed()) {
+                                askWin.webContents.send('ask-response-stream-chunk', {
+                                    content: this.state.currentResponse
+                                });
+                            }
+                        }
+                    );
+
+                    if (result.success) {
+                        fullDocument = result.content;
+
+                        // Update final state
+                        this.state.isStreaming = false;
+                        this.state.currentResponse = fullDocument;
+                        this._broadcastState();
+
+                        if (askWin && !askWin.isDestroyed()) {
+                            askWin.webContents.send('ask-response-stream-complete', {
+                                content: fullDocument
+                            });
+                        }
+
+                        // Save to database
+                        await askRepository.addAiMessage({
+                            sessionId,
+                            role: 'assistant',
+                            content: fullDocument
+                        });
+
+                        console.log(`[AskService] ✅ Chunked document generated: ${result.stats.estimatedPages} pages, ${result.stats.estimatedWords} words`);
+
+                        return { success: true };
+                    } else {
+                        throw new Error(result.error || 'Chunked generation failed');
+                    }
+                } catch (chunkError) {
+                    console.error('[AskService] Chunked generation failed, falling back to normal generation:', chunkError);
+                    // Fall through to normal generation as fallback
                 }
             }
 
