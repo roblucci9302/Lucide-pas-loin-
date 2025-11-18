@@ -256,6 +256,10 @@ contextBridge.exposeInMainWorld('api', {
     getCurrentShortcuts: () => ipcRenderer.invoke('settings:getCurrentShortcuts'),
     openShortcutSettingsWindow: () => ipcRenderer.invoke('shortcut:openShortcutSettingsWindow'),
 
+    // 🆕 Window Size Controls
+    setWindowSize: (windowName, preset) => ipcRenderer.invoke('settings:setWindowSize', { windowName, preset }),
+    getCurrentSize: (windowName) => ipcRenderer.invoke('settings:getCurrentSize', windowName),
+
     // Agent Profile Management
     getAvailableProfiles: () => ipcRenderer.invoke('agent:get-available-profiles'),
     getActiveProfile: () => ipcRenderer.invoke('agent:get-active-profile'),

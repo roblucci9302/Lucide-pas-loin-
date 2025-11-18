@@ -223,15 +223,34 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
         if (!wasResizable) askWin.setResizable(true);
 
         const currentBounds = askWin.getBounds();
-        const newBounds = {
-            x: currentBounds.x,
-            y: currentBounds.y,
-            width: browserMode ? WINDOW.ASK_BROWSER_WIDTH : WINDOW.ASK_DEFAULT_WIDTH,
-            height: browserMode ? WINDOW.ASK_BROWSER_HEIGHT : currentBounds.height
-        };
+        let newBounds;
+
+        if (browserMode) {
+            // ✅ Use browser preset (default to MEDIUM if not set)
+            const browserPreset = askWin.__browserSizePreset || 'MEDIUM';
+            const browserDims = WINDOW.ASK_BROWSER[browserPreset];
+            newBounds = {
+                x: currentBounds.x,
+                y: currentBounds.y,
+                width: browserDims.width,
+                height: browserDims.height
+            };
+            console.log(`[WindowManager] Entering browser mode with preset ${browserPreset} (${browserDims.width}x${browserDims.height})`);
+        } else {
+            // ✅ Restore normal preset (default to MEDIUM if not set)
+            const normalPreset = askWin.__sizePreset || 'MEDIUM';
+            const normalDims = WINDOW.ASK[normalPreset];
+            newBounds = {
+                x: currentBounds.x,
+                y: currentBounds.y,
+                width: normalDims.width,
+                height: normalDims.height
+            };
+            console.log(`[WindowManager] Exiting browser mode, restoring preset ${normalPreset} (${normalDims.width}x${normalDims.height})`);
+        }
 
         // Ajuster la position pour centrer la fenêtre agrandie
-        if (browserMode) {
+        if (browserMode && newBounds.width > currentBounds.width) {
             const widthDiff = newBounds.width - currentBounds.width;
             newBounds.x = Math.max(0, currentBounds.x - Math.round(widthDiff / 2));
         }
@@ -250,6 +269,79 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
                 }
             }
         });
+    });
+
+    // 🆕 WINDOW RESIZE PRESETS HANDLER
+    internalBridge.on('window:setWindowSize', ({ windowName, preset }) => {
+        console.log(`[WindowManager] Setting ${windowName} size to ${preset}`);
+        const win = windowPool.get(windowName);
+        if (!win || win.isDestroyed()) return;
+
+        const isBrowserMode = win.__browserMode === true;
+        let newBounds;
+
+        // Déterminer les bonnes dimensions selon le type de fenêtre et le mode
+        if (windowName === 'ask' && isBrowserMode) {
+            // Mode browser : utiliser ASK_BROWSER presets
+            newBounds = WINDOW.ASK_BROWSER[preset];
+            win.__browserSizePreset = preset;
+            console.log(`[WindowManager] Setting ASK BROWSER size: ${preset} (${newBounds.width}x${newBounds.height})`);
+        } else if (windowName === 'ask') {
+            // Mode normal : utiliser ASK presets
+            newBounds = WINDOW.ASK[preset];
+            win.__sizePreset = preset;
+            console.log(`[WindowManager] Setting ASK size: ${preset} (${newBounds.width}x${newBounds.height})`);
+        } else if (windowName === 'listen') {
+            // Listen window
+            newBounds = WINDOW.LISTEN[preset];
+            win.__sizePreset = preset;
+            console.log(`[WindowManager] Setting LISTEN size: ${preset} (${newBounds.width}x${newBounds.height})`);
+        }
+
+        if (!newBounds) {
+            console.warn(`[WindowManager] No preset found for ${windowName} / ${preset}`);
+            return;
+        }
+
+        const currentBounds = win.getBounds();
+        const finalBounds = {
+            x: currentBounds.x,
+            y: currentBounds.y,
+            width: newBounds.width,
+            height: newBounds.height
+        };
+
+        const wasResizable = win.isResizable();
+        if (!wasResizable) win.setResizable(true);
+
+        movementManager.animateWindowBounds(win, finalBounds, {
+            onComplete: () => {
+                if (!wasResizable) win.setResizable(false);
+
+                // ✅ CRITICAL: Ne pas update layouts en browser mode
+                if (!isBrowserMode) {
+                    updateChildWindowLayouts(true);
+                } else {
+                    console.log(`[WindowManager] Browser mode active - skipping layout update`);
+                }
+            }
+        });
+    });
+
+    // 🆕 GET CURRENT SIZE PRESET HANDLER
+    internalBridge.on('window:getCurrentSize', ({ windowName }, reply) => {
+        const win = windowPool.get(windowName);
+        if (!win || win.isDestroyed()) {
+            reply('MEDIUM');
+            return;
+        }
+
+        const isBrowserMode = win.__browserMode === true;
+        if (windowName === 'ask' && isBrowserMode) {
+            reply(win.__browserSizePreset || 'MEDIUM');
+        } else {
+            reply(win.__sizePreset || 'MEDIUM');
+        }
     });
 }
 

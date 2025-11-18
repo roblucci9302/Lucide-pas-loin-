@@ -177,9 +177,31 @@ class WindowLayoutManager {
         // ✅ FIX: Override ask dimensions if in browser mode
         if (askB && askInBrowserMode) {
             const { WINDOW } = require('../features/common/config/constants');
-            askB.height = WINDOW.ASK_BROWSER_HEIGHT;
-            askB.width = WINDOW.ASK_BROWSER_WIDTH;
-            console.log(`[Layout Debug] BROWSER MODE enforced dimensions: width=${askB.width}, height=${askB.height}`);
+            // Utiliser le preset stocké (défaut MEDIUM)
+            const browserPreset = ask.__browserSizePreset || 'MEDIUM';
+            const browserDimensions = WINDOW.ASK_BROWSER[browserPreset];
+
+            askB.height = browserDimensions.height;
+            askB.width = browserDimensions.width;
+            console.log(`[Layout Debug] BROWSER MODE enforced (${browserPreset}): width=${askB.width}, height=${askB.height}`);
+        }
+
+        // 🆕 Respect normal mode preset for Ask window
+        if (askB && !askInBrowserMode && ask.__sizePreset) {
+            const { WINDOW } = require('../features/common/config/constants');
+            const normalDimensions = WINDOW.ASK[ask.__sizePreset];
+            askB.height = normalDimensions.height;
+            askB.width = normalDimensions.width;
+            console.log(`[Layout Debug] ASK normal mode (${ask.__sizePreset}): width=${askB.width}, height=${askB.height}`);
+        }
+
+        // 🆕 Respect preset for Listen window
+        if (listenB && listen.__sizePreset) {
+            const { WINDOW } = require('../features/common/config/constants');
+            const listenDimensions = WINDOW.LISTEN[listen.__sizePreset];
+            listenB.height = listenDimensions.height;
+            listenB.width = listenDimensions.width;
+            console.log(`[Layout Debug] LISTEN preset (${listen.__sizePreset}): width=${listenB.width}, height=${listenB.height}`);
         }
 
         if (askVis) {

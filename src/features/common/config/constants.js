@@ -168,7 +168,7 @@ const WINDOW = {
     DEFAULT_HEIGHT: 600,
     HEADER_HEIGHT: 40,
 
-    // Feature windows
+    // Feature windows (legacy - kept for compatibility)
     LISTEN_MIN_WIDTH: 400,
     LISTEN_DEFAULT_WIDTH: 400,
     LISTEN_MAX_WIDTH: 900,
@@ -182,6 +182,30 @@ const WINDOW = {
     SETTINGS_WIDTH: 240,
     SETTINGS_MAX_HEIGHT: 400,
     SETTINGS_HIDE_DELAY: 200,
+
+    // 🆕 ASK WINDOW SIZE PRESETS
+    ASK: {
+        SMALL: { width: 900, height: 400 },
+        MEDIUM: { width: 900, height: 600 },    // Default
+        LARGE: { width: 900, height: 800 },
+        XLARGE: { width: 900, height: 1000 }
+    },
+
+    // 🆕 ASK BROWSER MODE SIZE PRESETS
+    ASK_BROWSER: {
+        SMALL: { width: 900, height: 700 },
+        MEDIUM: { width: 900, height: 900 },    // Default browser size
+        LARGE: { width: 1100, height: 1100 },
+        XLARGE: { width: 1400, height: 1400 }
+    },
+
+    // 🆕 LISTEN WINDOW SIZE PRESETS
+    LISTEN: {
+        SMALL: { width: 300, height: 400 },
+        MEDIUM: { width: 400, height: 600 },    // Default
+        LARGE: { width: 500, height: 800 },
+        XLARGE: { width: 600, height: 1000 }
+    }
 };
 
 /**
