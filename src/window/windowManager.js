@@ -215,6 +215,10 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
         const askWin = windowPool.get('ask');
         if (!askWin || askWin.isDestroyed()) return;
 
+        // ✅ FIX: Store browser mode state on window object
+        askWin.__browserMode = browserMode;
+        console.log(`[WindowManager] Browser mode state stored: ${browserMode}`);
+
         const wasResizable = askWin.isResizable();
         if (!wasResizable) askWin.setResizable(true);
 
@@ -235,7 +239,15 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
         movementManager.animateWindowBounds(askWin, newBounds, {
             onComplete: () => {
                 if (!wasResizable) askWin.setResizable(false);
-                updateChildWindowLayouts(true);
+
+                // ✅ FIX: Only update layouts when EXITING browser mode
+                // This prevents the layout manager from overriding browser dimensions
+                if (!browserMode) {
+                    console.log(`[WindowManager] Exiting browser mode - updating child layouts`);
+                    updateChildWindowLayouts(true);
+                } else {
+                    console.log(`[WindowManager] Entering browser mode - skipping layout update to preserve dimensions`);
+                }
             }
         });
     });
@@ -690,7 +702,14 @@ function destroyFeatureWindows() {
     }
     featureWindows.forEach(name=>{
         const win = windowPool.get(name);
-        if (win && !win.isDestroyed()) win.destroy();
+        if (win && !win.isDestroyed()) {
+            // ✅ FIX: Clear browser mode state before destroying ask window
+            if (name === 'ask' && win.__browserMode !== undefined) {
+                console.log(`[WindowManager] Clearing browser mode state for ask window`);
+                delete win.__browserMode;
+            }
+            win.destroy();
+        }
         windowPool.delete(name);
     });
 }

@@ -145,28 +145,42 @@ class WindowLayoutManager {
         } else {
             display = getCurrentDisplay(header);
         }
-    
+
         const { width: screenWidth, height: screenHeight, x: workAreaX, y: workAreaY } = display.workArea;
-    
+
         const ask = this.windowPool.get('ask');
         const listen = this.windowPool.get('listen');
-    
+
         const askVis = visibility.ask && ask && !ask.isDestroyed();
         const listenVis = visibility.listen && listen && !listen.isDestroyed();
-    
+
         if (!askVis && !listenVis) return {};
-    
+
+        // ✅ FIX: Check if ask window is in browser mode
+        const askInBrowserMode = ask && ask.__browserMode === true;
+        if (askInBrowserMode) {
+            console.log(`[Layout Debug] Ask window is in BROWSER MODE - will enforce browser dimensions`);
+        }
+
         const PAD = 8;
         const headerTopRel = headerBounds.y - workAreaY;
         const headerBottomRel = headerTopRel + headerBounds.height;
         const headerCenterXRel = headerBounds.x - workAreaX + headerBounds.width / 2;
-        
+
         const relativeX = headerCenterXRel / screenWidth;
         const relativeY = (headerBounds.y - workAreaY) / screenHeight;
         const strategy = this.determineLayoutStrategy(headerBounds, screenWidth, screenHeight, relativeX, relativeY, workAreaX, workAreaY);
-    
+
         const askB = askVis ? ask.getBounds() : null;
         const listenB = listenVis ? listen.getBounds() : null;
+
+        // ✅ FIX: Override ask dimensions if in browser mode
+        if (askB && askInBrowserMode) {
+            const { WINDOW } = require('../features/common/config/constants');
+            askB.height = WINDOW.ASK_BROWSER_HEIGHT;
+            askB.width = WINDOW.ASK_BROWSER_WIDTH;
+            console.log(`[Layout Debug] BROWSER MODE enforced dimensions: width=${askB.width}, height=${askB.height}`);
+        }
 
         if (askVis) {
             console.log(`[Layout Debug] Ask Window Bounds: height=${askB.height}, width=${askB.width}`);
