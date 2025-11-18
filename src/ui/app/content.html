@@ -135,6 +135,30 @@
         </script>
         <transcription-center id="transcription-center"></transcription-center>
 
+        <!-- Model Status Indicator -->
+        <script type="module">
+            import { ModelStatusIndicator } from '../components/ModelStatusIndicator.js';
+        </script>
+        <model-status-indicator id="model-status"></model-status-indicator>
+
+        <!-- Workflow Builder -->
+        <script type="module">
+            import { WorkflowBuilder } from '../components/WorkflowBuilder.js';
+        </script>
+        <workflow-builder id="workflow-builder"></workflow-builder>
+
+        <!-- Meeting Report Viewer -->
+        <script type="module">
+            import { MeetingReportViewer } from '../components/MeetingReportViewer.js';
+        </script>
+        <meeting-report-viewer id="meeting-report-viewer"></meeting-report-viewer>
+
+        <!-- Data Export Manager -->
+        <script type="module">
+            import { DataExportManager } from '../components/DataExportManager.js';
+        </script>
+        <data-export-manager id="data-export-manager"></data-export-manager>
+
         <script>
             window.addEventListener('DOMContentLoaded', () => {
                 const app = document.getElementById('lucide');
