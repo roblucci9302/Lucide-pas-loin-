@@ -1,4 +1,5 @@
 import { html, css, LitElement } from '../assets/lit-core-2.7.4.min.js';
+import './TranscriptionToolbar.js';
 
 /**
  * TranscriptionViewer Component
@@ -10,6 +11,7 @@ import { html, css, LitElement } from '../assets/lit-core-2.7.4.min.js';
  * - Generate meeting minutes
  * - View insights
  * - Add/view notes
+ * - AI tools (Phase 6.4): Summarize, expand, extract points, rewrite
  */
 export class TranscriptionViewer extends LitElement {
     static properties = {
@@ -22,7 +24,10 @@ export class TranscriptionViewer extends LitElement {
         editingSegmentId: { type: String }, // Currently editing segment
         editMode: { type: Boolean }, // Global edit mode toggle
         speakersList: { type: Array }, // List of speakers with counts
-        canUndo: { type: Boolean } // Whether undo is available
+        canUndo: { type: Boolean }, // Whether undo is available
+        // Phase 6.4: AI Tools
+        aiResultModal: { type: Object }, // {visible, title, content, type}
+        currentSelection: { type: String } // Currently selected text
     };
 
     static styles = css`
@@ -435,6 +440,133 @@ export class TranscriptionViewer extends LitElement {
             font-size: 14px;
         }
 
+        /* AI Result Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .ai-result-modal {
+            background: rgba(30, 30, 40, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 700px;
+            max-height: 80vh;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            transform: scale(0.9);
+            transition: transform 0.2s ease;
+        }
+
+        .modal-overlay.visible .ai-result-modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.95);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-close {
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .modal-content {
+            max-height: 60vh;
+            overflow-y: auto;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.7;
+            font-size: 14px;
+            user-select: text;
+        }
+
+        .modal-content pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .modal-content ul,
+        .modal-content ol {
+            margin-left: 20px;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+
+        .modal-content li {
+            margin: 4px 0;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            background: rgba(129, 140, 248, 0.15);
+            border: 1px solid rgba(129, 140, 248, 0.3);
+            border-radius: 8px;
+            color: rgba(129, 140, 248, 0.95);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .modal-btn:hover {
+            background: rgba(129, 140, 248, 0.25);
+            border-color: rgba(129, 140, 248, 0.4);
+        }
+
         /* Scrollbar */
         .content::-webkit-scrollbar {
             width: 8px;
@@ -466,6 +598,22 @@ export class TranscriptionViewer extends LitElement {
         this.editMode = false; // Global edit mode toggle
         this.speakersList = []; // List of speakers
         this.canUndo = false; // Whether undo is available
+        // Phase 6.4: AI Tools
+        this.aiResultModal = { visible: false, title: '', content: '', type: '' };
+        this.currentSelection = '';
+    }
+
+    connectedCallback() {
+        super.connectedCallback();
+        // Listen for text selection
+        document.addEventListener('mouseup', this._handleTextSelection.bind(this));
+        document.addEventListener('keyup', this._handleTextSelection.bind(this));
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        document.removeEventListener('mouseup', this._handleTextSelection.bind(this));
+        document.removeEventListener('keyup', this._handleTextSelection.bind(this));
     }
 
     render() {
@@ -597,6 +745,37 @@ export class TranscriptionViewer extends LitElement {
                 <!-- Content -->
                 <div class="content">
                     ${this._renderTabContent()}
+                </div>
+            </div>
+
+            <!-- AI Toolbar (Phase 6.4) -->
+            <transcription-toolbar
+                @summarize="${this._handleAISummarize}"
+                @extract-points="${this._handleAIExtractPoints}"
+                @expand="${this._handleAIExpand}"
+                @rewrite="${this._handleAIRewrite}"
+            ></transcription-toolbar>
+
+            <!-- AI Result Modal (Phase 6.4) -->
+            <div class="modal-overlay ${this.aiResultModal.visible ? 'visible' : ''}" @click="${this._closeAIModal}">
+                <div class="ai-result-modal" @click="${(e) => e.stopPropagation()}">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            <span>${this.aiResultModal.title}</span>
+                        </div>
+                        <button class="modal-close" @click="${this._closeAIModal}">✕</button>
+                    </div>
+                    <div class="modal-content">
+                        ${this._renderAIResult()}
+                    </div>
+                    <div class="modal-actions">
+                        <button class="modal-btn" @click="${this._copyAIResult}">
+                            📋 Copy to Clipboard
+                        </button>
+                        <button class="modal-btn" @click="${this._closeAIModal}">
+                            Close
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -1059,6 +1238,278 @@ export class TranscriptionViewer extends LitElement {
             minute: '2-digit',
             second: '2-digit'
         });
+    }
+
+    // ====== AI Tools (Phase 6.4) ======
+
+    /**
+     * Handle text selection - show toolbar if text is selected
+     */
+    _handleTextSelection() {
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+
+        if (!selectedText || this.editMode || this.editingSegmentId) {
+            // Hide toolbar if no selection or in edit mode
+            const toolbar = this.shadowRoot.querySelector('transcription-toolbar');
+            if (toolbar) toolbar.hide();
+            this.currentSelection = '';
+            return;
+        }
+
+        // Only show toolbar if selection is within our component
+        const range = selection.getRangeAt(0);
+        const container = range.commonAncestorContainer;
+        const isWithinComponent = this.shadowRoot.contains(container) ||
+                                  this.shadowRoot.contains(container.parentNode);
+
+        if (!isWithinComponent || selectedText.length < 10) {
+            const toolbar = this.shadowRoot.querySelector('transcription-toolbar');
+            if (toolbar) toolbar.hide();
+            return;
+        }
+
+        this.currentSelection = selectedText;
+
+        // Calculate toolbar position
+        const rect = range.getBoundingClientRect();
+        const toolbar = this.shadowRoot.querySelector('transcription-toolbar');
+
+        if (toolbar) {
+            const x = rect.left + (rect.width / 2) - 150; // Center toolbar
+            const y = rect.top - 60; // Position above selection
+            toolbar.show(x, y, selectedText);
+        }
+    }
+
+    /**
+     * Handle AI summarize request
+     */
+    async _handleAISummarize(event) {
+        const { text, style } = event.detail;
+
+        try {
+            const result = await window.api.invoke('transcription:summarize-selection', {
+                text,
+                options: {
+                    style,
+                    language: this.transcription?.language || 'en'
+                }
+            });
+
+            if (result.success) {
+                this.aiResultModal = {
+                    visible: true,
+                    title: `📋 Summary (${style})`,
+                    content: result.summary,
+                    type: 'summary',
+                    rawData: result
+                };
+
+                // Reset toolbar
+                const toolbar = this.shadowRoot.querySelector('transcription-toolbar');
+                if (toolbar) {
+                    toolbar.resetProcessing();
+                    toolbar.hide();
+                }
+            } else {
+                alert('Failed to summarize: ' + result.error);
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error summarizing:', error);
+            alert('Failed to summarize text');
+        }
+    }
+
+    /**
+     * Handle AI extract key points request
+     */
+    async _handleAIExtractPoints(event) {
+        const { text } = event.detail;
+
+        try {
+            const result = await window.api.invoke('transcription:extract-key-points', {
+                text,
+                options: {
+                    maxPoints: 5,
+                    language: this.transcription?.language || 'en',
+                    includeContext: true
+                }
+            });
+
+            if (result.success) {
+                this.aiResultModal = {
+                    visible: true,
+                    title: '🎯 Key Points',
+                    content: result.keyPoints,
+                    type: 'key-points',
+                    rawData: result
+                };
+
+                // Reset toolbar
+                const toolbar = this.shadowRoot.querySelector('transcription-toolbar');
+                if (toolbar) {
+                    toolbar.resetProcessing();
+                    toolbar.hide();
+                }
+            } else {
+                alert('Failed to extract key points: ' + result.error);
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error extracting points:', error);
+            alert('Failed to extract key points');
+        }
+    }
+
+    /**
+     * Handle AI expand request
+     */
+    async _handleAIExpand(event) {
+        const { text } = event.detail;
+
+        try {
+            const result = await window.api.invoke('transcription:expand-selection', {
+                text,
+                options: {
+                    targetLength: 'medium',
+                    language: this.transcription?.language || 'en'
+                }
+            });
+
+            if (result.success) {
+                this.aiResultModal = {
+                    visible: true,
+                    title: '📝 Expanded Text',
+                    content: result.expandedText,
+                    type: 'expanded',
+                    rawData: result
+                };
+
+                // Reset toolbar
+                const toolbar = this.shadowRoot.querySelector('transcription-toolbar');
+                if (toolbar) {
+                    toolbar.resetProcessing();
+                    toolbar.hide();
+                }
+            } else {
+                alert('Failed to expand text: ' + result.error);
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error expanding:', error);
+            alert('Failed to expand text');
+        }
+    }
+
+    /**
+     * Handle AI rewrite request
+     */
+    async _handleAIRewrite(event) {
+        const { text, style } = event.detail;
+
+        try {
+            const result = await window.api.invoke('transcription:rewrite-text', {
+                text,
+                options: {
+                    style,
+                    language: this.transcription?.language || 'en'
+                }
+            });
+
+            if (result.success) {
+                this.aiResultModal = {
+                    visible: true,
+                    title: `✍️ Rewritten (${style})`,
+                    content: result.rewrittenText,
+                    type: 'rewritten',
+                    rawData: result
+                };
+
+                // Reset toolbar
+                const toolbar = this.shadowRoot.querySelector('transcription-toolbar');
+                if (toolbar) {
+                    toolbar.resetProcessing();
+                    toolbar.hide();
+                }
+            } else {
+                alert('Failed to rewrite text: ' + result.error);
+            }
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error rewriting:', error);
+            alert('Failed to rewrite text');
+        }
+    }
+
+    /**
+     * Render AI result content
+     */
+    _renderAIResult() {
+        if (!this.aiResultModal.visible) return '';
+
+        const { content, type } = this.aiResultModal;
+
+        if (type === 'key-points' && Array.isArray(content)) {
+            // Render key points as list
+            return html`
+                <ul style="list-style: none; padding: 0;">
+                    ${content.map((point, index) => html`
+                        <li style="margin-bottom: 16px; padding-left: 0;">
+                            <strong style="color: rgba(129, 140, 248, 0.95);">${index + 1}. ${point.point}</strong>
+                            ${point.context ? html`
+                                <div style="margin-top: 4px; padding-left: 20px; color: rgba(255, 255, 255, 0.7);">
+                                    ${point.context}
+                                </div>
+                            ` : ''}
+                        </li>
+                    `)}
+                </ul>
+            `;
+        }
+
+        // Regular text content
+        return html`<pre style="white-space: pre-wrap; margin: 0;">${content}</pre>`;
+    }
+
+    /**
+     * Close AI result modal
+     */
+    _closeAIModal() {
+        this.aiResultModal = { ...this.aiResultModal, visible: false };
+    }
+
+    /**
+     * Copy AI result to clipboard
+     */
+    async _copyAIResult() {
+        try {
+            let textToCopy = '';
+
+            if (this.aiResultModal.type === 'key-points' && Array.isArray(this.aiResultModal.content)) {
+                // Format key points as text
+                textToCopy = this.aiResultModal.content.map((point, index) => {
+                    let text = `${index + 1}. ${point.point}`;
+                    if (point.context) {
+                        text += `\n   ${point.context}`;
+                    }
+                    return text;
+                }).join('\n\n');
+            } else {
+                textToCopy = this.aiResultModal.content;
+            }
+
+            await navigator.clipboard.writeText(textToCopy);
+
+            // Show feedback
+            const btn = this.shadowRoot.querySelector('.modal-btn');
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 2000);
+
+        } catch (error) {
+            console.error('[TranscriptionViewer] Error copying to clipboard:', error);
+            alert('Failed to copy to clipboard');
+        }
     }
 }
 

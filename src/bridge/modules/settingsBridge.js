@@ -32,6 +32,22 @@ module.exports = {
         ipcMain.handle('get-preset-templates', () => presetRepository.getPresetTemplates());
         ipcMain.handle('get-web-url', () => process.env.pickleglass_WEB_URL || 'http://localhost:3000');
 
+        // 🆕 Window Size Controls
+        ipcMain.handle('settings:setWindowSize', async (event, { windowName, preset }) => {
+            const internalBridge = require('../../bridge/internalBridge');
+            internalBridge.emit('window:setWindowSize', { windowName, preset });
+            return { success: true };
+        });
+
+        ipcMain.handle('settings:getCurrentSize', async (event, windowName) => {
+            return new Promise((resolve) => {
+                const internalBridge = require('../../bridge/internalBridge');
+                internalBridge.emit('window:getCurrentSize', { windowName }, (preset) => {
+                    resolve(preset);
+                });
+            });
+        });
+
         console.log('[SettingsBridge] Initialized');
     }
 };

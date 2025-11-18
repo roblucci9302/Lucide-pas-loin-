@@ -753,6 +753,160 @@ module.exports = {
             }
         });
 
-        console.log('[TranscriptionBridge] IPC handlers initialized successfully (24 handlers)');
+        // ====== AI Processing Tools (Phase 6.4) ======
+
+        const transcriptionProcessingService = require('../features/listen/transcription/transcriptionProcessingService');
+
+        /**
+         * Summarize selected text
+         * @param {string} text - Text to summarize
+         * @param {Object} options - Summarization options
+         * @returns {Object} Summary result
+         */
+        ipcMain.handle('transcription:summarize-selection', async (event, { text, options = {} }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const result = await transcriptionProcessingService.summarizeSelection(text, options);
+
+                return result;
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error summarizing selection:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Expand/develop selected text
+         * @param {string} text - Text to expand
+         * @param {Object} options - Expansion options
+         * @returns {Object} Expanded text
+         */
+        ipcMain.handle('transcription:expand-selection', async (event, { text, options = {} }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const result = await transcriptionProcessingService.expandSelection(text, options);
+
+                return result;
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error expanding selection:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Extract key points from text
+         * @param {string} text - Text to analyze
+         * @param {Object} options - Extraction options
+         * @returns {Object} Key points
+         */
+        ipcMain.handle('transcription:extract-key-points', async (event, { text, options = {} }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const result = await transcriptionProcessingService.extractKeyPoints(text, options);
+
+                return result;
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error extracting key points:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Rewrite text in different style
+         * @param {string} text - Text to rewrite
+         * @param {Object} options - Rewrite options
+         * @returns {Object} Rewritten text
+         */
+        ipcMain.handle('transcription:rewrite-text', async (event, { text, options = {} }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const result = await transcriptionProcessingService.rewriteText(text, options);
+
+                return result;
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error rewriting text:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Generate title from text using AI
+         * @param {string} text - Text to generate title from
+         * @param {Object} options - Generation options
+         * @returns {Object} Generated title
+         */
+        ipcMain.handle('transcription:generate-title-ai', async (event, { text, options = {} }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const result = await transcriptionProcessingService.generateTitle(text, options);
+
+                return result;
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error generating title:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Analyze sentiment of text
+         * @param {string} text - Text to analyze
+         * @param {Object} options - Analysis options
+         * @returns {Object} Sentiment analysis
+         */
+        ipcMain.handle('transcription:analyze-sentiment', async (event, { text, options = {} }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const result = await transcriptionProcessingService.analyzeSentiment(text, options);
+
+                return result;
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error analyzing sentiment:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        console.log('[TranscriptionBridge] IPC handlers initialized successfully (30 handlers)');
     }
 };

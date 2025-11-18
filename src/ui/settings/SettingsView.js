@@ -476,6 +476,70 @@ export class SettingsView extends LitElement {
         :host-context(body.has-glass) .settings-container::before {
             display: none !important;
         }
+
+        /* 🆕 Window Size Controls */
+        .window-size-section {
+            margin: 12px 0;
+            padding: 12px 0 8px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .section-title {
+            font-size: 10px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .size-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 0;
+        }
+
+        .size-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+            min-width: 55px;
+        }
+
+        .size-buttons-group {
+            display: flex;
+            gap: 3px;
+        }
+
+        .size-preset-btn {
+            width: 20px;
+            height: 20px;
+            font-size: 9px;
+            font-weight: 600;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.15s;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .size-preset-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .size-preset-btn.active {
+            background: rgba(100, 150, 255, 0.3);
+            border-color: rgba(100, 150, 255, 0.8);
+            color: white;
+            box-shadow: 0 0 6px rgba(100, 150, 255, 0.4);
+        }
     `;
 
 
@@ -509,6 +573,10 @@ export class SettingsView extends LitElement {
         // Agent profile properties
         availableProfiles: { type: Array, state: true },
         activeProfile: { type: String, state: true },
+        // 🆕 Window size presets
+        askSizePreset: { type: String, state: true },
+        listenSizePreset: { type: String, state: true },
+        browserSizePreset: { type: String, state: true },
     };
     //////// after_modelStateService ////////
 
@@ -545,6 +613,10 @@ export class SettingsView extends LitElement {
         // Agent profiles
         this.availableProfiles = [];
         this.activeProfile = 'lucide_assistant';
+        // 🆕 Window size presets
+        this.askSizePreset = 'MEDIUM';
+        this.listenSizePreset = 'MEDIUM';
+        this.browserSizePreset = 'MEDIUM';
         this.loadInitialData();
         //////// after_modelStateService ////////
     }
@@ -926,13 +998,26 @@ export class SettingsView extends LitElement {
         window.api.settingsView.openShortcutSettingsWindow();
     }
 
-    connectedCallback() {
+    async connectedCallback() {
         super.connectedCallback();
-        
+
         this.setupEventListeners();
         this.setupIpcListeners();
         this.setupWindowResize();
         this.loadAutoUpdateSetting();
+
+        // 🆕 Load window size presets
+        try {
+            this.askSizePreset = await window.api.settingsView.getCurrentSize('ask');
+            this.listenSizePreset = await window.api.settingsView.getCurrentSize('listen');
+            // For browser, we check the ask window's browser preset
+            const askWin = await window.api.settingsView.getCurrentSize('ask');
+            this.browserSizePreset = askWin || 'MEDIUM';
+            this.requestUpdate();
+        } catch (error) {
+            console.error('[SettingsView] Error loading window size presets:', error);
+        }
+
         // Force one height calculation immediately (innerHeight may be 0 at first)
         setTimeout(() => this.updateScrollHeight(), 0);
     }
@@ -1157,6 +1242,25 @@ export class SettingsView extends LitElement {
         this.requestUpdate();
     }
 
+    // 🆕 Window Size Controls
+    async handleSizeChange(windowName, preset) {
+        console.log(`[SettingsView] Changing ${windowName} size to ${preset}`);
+
+        if (windowName === 'ask') {
+            this.askSizePreset = preset;
+            await window.api.settingsView.setWindowSize('ask', preset);
+        } else if (windowName === 'listen') {
+            this.listenSizePreset = preset;
+            await window.api.settingsView.setWindowSize('listen', preset);
+        } else if (windowName === 'browser') {
+            this.browserSizePreset = preset;
+            // For browser, we set it on the ask window which will use it when entering browser mode
+            await window.api.settingsView.setWindowSize('ask', preset);
+        }
+
+        this.requestUpdate();
+    }
+
     async handleSaveApiKey() {
         const input = this.shadowRoot.getElementById('api-key-input');
         if (!input || !input.value) return;
@@ -1212,6 +1316,71 @@ export class SettingsView extends LitElement {
             // Restore previous state on error
             await this.refreshOllamaStatus();
         }
+    }
+
+    // 🆕 Render Window Size Controls
+    _renderWindowSizeControls() {
+        const presets = ['SMALL', 'MEDIUM', 'LARGE', 'XLARGE'];
+        const labels = {
+            SMALL: 'S',
+            MEDIUM: 'M',
+            LARGE: 'L',
+            XLARGE: 'XL'
+        };
+
+        return html`
+            <div class="window-size-section">
+                <div class="section-title">Window Sizes</div>
+
+                <!-- Ask Window -->
+                <div class="size-row">
+                    <span class="size-label">Ask:</span>
+                    <div class="size-buttons-group">
+                        ${presets.map(preset => html`
+                            <button
+                                class="size-preset-btn ${this.askSizePreset === preset ? 'active' : ''}"
+                                @click=${() => this.handleSizeChange('ask', preset)}
+                                title="${preset}"
+                            >
+                                ${labels[preset]}
+                            </button>
+                        `)}
+                    </div>
+                </div>
+
+                <!-- Listen Window -->
+                <div class="size-row">
+                    <span class="size-label">Listen:</span>
+                    <div class="size-buttons-group">
+                        ${presets.map(preset => html`
+                            <button
+                                class="size-preset-btn ${this.listenSizePreset === preset ? 'active' : ''}"
+                                @click=${() => this.handleSizeChange('listen', preset)}
+                                title="${preset}"
+                            >
+                                ${labels[preset]}
+                            </button>
+                        `)}
+                    </div>
+                </div>
+
+                <!-- Browser Mode -->
+                <div class="size-row">
+                    <span class="size-label">Browser:</span>
+                    <div class="size-buttons-group">
+                        ${presets.map(preset => html`
+                            <button
+                                class="size-preset-btn ${this.browserSizePreset === preset ? 'active' : ''}"
+                                @click=${() => this.handleSizeChange('browser', preset)}
+                                title="${preset}"
+                            >
+                                ${labels[preset]}
+                            </button>
+                        `)}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     //////// after_modelStateService ////////
@@ -1524,6 +1693,8 @@ export class SettingsView extends LitElement {
                     <button class="settings-button full-width" @click=${this.handleToggleScreenshot}>
                         <span>${this.isScreenshotEnabled ? 'Désactiver les captures d\'écran' : 'Activer les captures d\'écran'}</span>
                     </button>
+
+                    ${this._renderWindowSizeControls()}
 
                     <div class="bottom-buttons">
                         ${this.firebaseUser
