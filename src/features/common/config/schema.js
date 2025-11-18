@@ -324,6 +324,62 @@ const LATEST_SCHEMA = {
             { name: 'created_at', type: 'INTEGER' },
             { name: 'sync_state', type: 'TEXT DEFAULT \'clean\'' }
         ]
+    },
+    // Phase 3: Agent Improvement - Response Feedback
+    response_feedback: {
+        columns: [
+            { name: 'id', type: 'TEXT PRIMARY KEY' },
+            { name: 'uid', type: 'TEXT NOT NULL' },
+            { name: 'session_id', type: 'TEXT NOT NULL' },
+            { name: 'message_id', type: 'TEXT NOT NULL' },
+            { name: 'agent_profile', type: 'TEXT NOT NULL' },
+            // Feedback
+            { name: 'rating', type: 'INTEGER' }, // 1-5 stars (or -1 for thumbs down, 1 for thumbs up)
+            { name: 'feedback_type', type: 'TEXT' }, // 'helpful', 'accurate', 'tone', 'format', 'other'
+            { name: 'comment', type: 'TEXT' }, // Optional text comment
+            { name: 'is_positive', type: 'INTEGER DEFAULT 1' }, // 1 = positive, 0 = negative
+            // Context
+            { name: 'question', type: 'TEXT' }, // The user's question
+            { name: 'response_preview', type: 'TEXT' }, // First 200 chars of response
+            { name: 'response_length', type: 'INTEGER' }, // Full response length
+            { name: 'response_time_ms', type: 'INTEGER' }, // Time to generate response
+            // Metadata
+            { name: 'created_at', type: 'INTEGER' },
+            { name: 'sync_state', type: 'TEXT DEFAULT \'clean\'' }
+        ]
+    },
+    // Phase 3: Agent Improvement - Response Quality Metrics
+    response_quality_metrics: {
+        columns: [
+            { name: 'id', type: 'TEXT PRIMARY KEY' },
+            { name: 'uid', type: 'TEXT NOT NULL' },
+            { name: 'session_id', type: 'TEXT NOT NULL' },
+            { name: 'message_id', type: 'TEXT NOT NULL' },
+            { name: 'agent_profile', type: 'TEXT NOT NULL' },
+            // Quality scores (0-1 range)
+            { name: 'overall_score', type: 'REAL' },
+            { name: 'length_score', type: 'REAL' }, // Is length appropriate?
+            { name: 'structure_score', type: 'REAL' }, // Has good structure (headers, bullets)?
+            { name: 'vocabulary_score', type: 'REAL' }, // Uses domain vocabulary?
+            { name: 'framework_score', type: 'REAL' }, // References relevant frameworks?
+            { name: 'coherence_score', type: 'REAL' }, // Coherent and well-organized?
+            // Performance metrics
+            { name: 'latency_ms', type: 'INTEGER' }, // Response time
+            { name: 'tokens_input', type: 'INTEGER' },
+            { name: 'tokens_output', type: 'INTEGER' },
+            { name: 'sources_used', type: 'INTEGER' }, // Number of RAG sources used
+            { name: 'cache_hit', type: 'INTEGER DEFAULT 0' }, // 1 if from cache
+            // LLM-as-Judge (optional, for sampling)
+            { name: 'llm_judge_score', type: 'REAL' }, // Score from LLM evaluation
+            { name: 'llm_judge_reasoning', type: 'TEXT' }, // Why this score?
+            // Context
+            { name: 'model_used', type: 'TEXT' },
+            { name: 'provider_used', type: 'TEXT' },
+            { name: 'temperature', type: 'REAL' },
+            // Metadata
+            { name: 'created_at', type: 'INTEGER' },
+            { name: 'sync_state', type: 'TEXT DEFAULT \'clean\'' }
+        ]
     }
 };
 
