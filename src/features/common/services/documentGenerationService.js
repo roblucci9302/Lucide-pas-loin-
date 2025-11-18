@@ -421,7 +421,7 @@ Return ONLY valid JSON.`
             marketing_expert: {
                 boldHeaders: true,
                 callouts: true,
-                metrics Highlights: true
+                metricsHighlights: true
             },
             hr_specialist: {
                 confidentialNotice: true,
