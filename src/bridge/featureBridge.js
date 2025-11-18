@@ -15,6 +15,7 @@ const promptBridge = require('./modules/promptBridge'); // Phase WOW 1 - Jour 5
 const feedbackBridge = require('./modules/feedbackBridge'); // Phase 3 - Agent Improvement
 const memoryBridge = require('./modules/memoryBridge'); // Phase 2 - Long-term memory
 const performanceBridge = require('./modules/performanceBridge'); // Phase 3 - Performance & Optimization
+const documentUploadBridge = require('./modules/documentUploadBridge'); // Phase 5 - Document Management (INPUT)
 
 module.exports = {
     /**
@@ -36,6 +37,7 @@ module.exports = {
         feedbackBridge.initialize(); // Phase 3 - Agent Improvement
         memoryBridge.initialize(); // Phase 2 - Long-term memory
         performanceBridge.initialize(); // Phase 3 - Performance & Optimization
+        documentUploadBridge.initialize(); // Phase 5 - Document Management (INPUT)
 
         console.log('[FeatureBridge] All bridges initialized successfully');
     },
