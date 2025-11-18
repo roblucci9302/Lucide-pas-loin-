@@ -19,6 +19,10 @@ const askRepositoryAdapter = {
     getAllAiMessagesBySessionId: (sessionId) => {
         // This function does not require a UID at the service level.
         return getBaseRepository().getAllAiMessagesBySessionId(sessionId);
+    },
+    // 🆕 PHASE 3: Update existing AI message
+    updateAiMessage: ({ sessionId, messageId, content }) => {
+        return getBaseRepository().updateAiMessage({ sessionId, messageId, content });
     }
 };
 

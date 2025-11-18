@@ -34,6 +34,7 @@ const personalKnowledgeBaseService = require('../common/services/personalKnowled
 const semanticCacheService = require('../common/services/semanticCacheService'); // Phase 3 - Performance & Optimization
 const modelSelectionService = require('../common/services/modelSelectionService'); // Phase 3 - Performance & Optimization
 const styleAdaptationService = require('../common/services/styleAdaptationService'); // Phase 3 - Performance & Optimization
+const chunkedGenerationService = require('../common/services/chunkedGenerationService'); // Phase 2 - Chunked Generation
 
 // Try to load sharp, but don't fail if it's not available
 let sharp;
@@ -46,6 +47,14 @@ try {
     sharp = null;
 }
 let lastScreenshot = null;
+
+// 🆕 LENGTH_PRESETS - Configuration pour le contrôle de la longueur des réponses
+const LENGTH_PRESETS = {
+    concise: 512,        // Réponse courte et concise
+    standard: 2048,      // Longueur standard (ancienne valeur par défaut)
+    detailed: 4096,      // Réponse détaillée (nouvelle valeur par défaut)
+    comprehensive: 8192  // Document complet et exhaustif (nécessite Gemini)
+};
 
 async function captureScreenshot(options = {}) {
     if (process.platform === 'darwin') {
@@ -277,7 +286,7 @@ class AskService {
      * @param {string} userPrompt
      * @returns {Promise<{success: boolean, response?: string, error?: string}>}
      */
-    async sendMessage(userPrompt, conversationHistoryRaw=[]) {
+    async sendMessage(userPrompt, conversationHistoryRaw=[], targetLength='detailed') {
         internalBridge.emit('window:requestVisibility', { name: 'ask', visible: true });
         this.state = {
             ...this.state,
@@ -482,6 +491,28 @@ class AskService {
                 console.log(`[AskService] Using default model: ${modelInfo.model} for provider: ${modelInfo.provider}`);
             }
 
+            // 🆕 PHASE 1.3: Auto-switch to Gemini for comprehensive (long) documents
+            if (targetLength === 'comprehensive') {
+                const providerSettingsRepository = require('../common/repositories/providerSettings');
+                const geminiSettings = await providerSettingsRepository.getByProvider('gemini');
+
+                if (geminiSettings && geminiSettings.api_key) {
+                    console.log(`[AskService] 📄 Comprehensive document requested (8192 tokens)`);
+                    console.log(`[AskService] 🔄 Auto-switching to Gemini for optimal long-form generation`);
+                    console.log(`[AskService] Previous: ${modelInfo.provider}/${modelInfo.model}`);
+
+                    // Switch to Gemini
+                    modelInfo.provider = 'gemini';
+                    modelInfo.apiKey = geminiSettings.api_key;
+                    modelInfo.model = geminiSettings.selected_llm_model || 'gemini-2.5-flash';
+
+                    console.log(`[AskService] New: ${modelInfo.provider}/${modelInfo.model}`);
+                } else {
+                    console.warn(`[AskService] ⚠️ Comprehensive length requested but Gemini not configured`);
+                    console.warn(`[AskService] Continuing with ${modelInfo.provider} (may have token limitations)`);
+                }
+            }
+
             // Vérifier si les captures d'écran sont activées
             const isScreenshotEnabled = getWindowManager().getScreenshotEnabled();
             console.log(`[AskService] Screenshot capture is ${isScreenshotEnabled ? 'enabled' : 'disabled'}`);
@@ -563,6 +594,87 @@ class AskService {
                 }
             }
 
+            // 🆕 PHASE 2: CHUNKED GENERATION - Detect if we need chunking for long documents
+            const chunkedGenService = chunkedGenerationService.getInstance();
+            const needsChunking = chunkedGenService.shouldUseChunking(userPrompt, targetLength);
+
+            if (needsChunking) {
+                console.log('[AskService] 📚 Long document detected - using chunked generation');
+
+                // Broadcast initial state
+                this.state.isLoading = false;
+                this.state.isStreaming = true;
+                this.state.currentResponse = '📋 **Génération de document en cours...**\n\nAnalyse de votre demande et création de la structure...';
+                this._broadcastState();
+
+                // Generate document with progress updates
+                const askWin = getWindowPool()?.get('ask');
+                let fullDocument = '';
+
+                try {
+                    const result = await chunkedGenService.generateDocument(
+                        userPrompt,
+                        modelInfo,
+                        systemPrompt,
+                        (progressUpdate) => {
+                            // Update UI with progress
+                            if (progressUpdate.stage === 'outline') {
+                                this.state.currentResponse = '📋 **Génération de document en cours...**\n\nCréation de la structure du document...';
+                            } else if (progressUpdate.stage === 'introduction') {
+                                this.state.currentResponse = `📋 **Structure créée !**\n\n${progressUpdate.outline.sections.length} sections identifiées\n\nGénération de l'introduction...`;
+                            } else if (progressUpdate.stage === 'section') {
+                                fullDocument = fullDocument || `# ${progressUpdate.outline?.title || 'Document'}\n\n`;
+                                this.state.currentResponse = `📝 **Section ${progressUpdate.currentSection}/${progressUpdate.totalSections}**\n\n${progressUpdate.sectionTitle}\n\nGénération en cours... (${progressUpdate.progress}%)`;
+                            } else if (progressUpdate.stage === 'conclusion') {
+                                this.state.currentResponse = '🎯 **Rédaction de la conclusion...**\n\nSynthèse finale et recommandations...';
+                            } else if (progressUpdate.stage === 'complete') {
+                                this.state.currentResponse = '✅ **Document terminé !**';
+                            }
+
+                            this._broadcastState();
+
+                            // Also send to window if available
+                            if (askWin && !askWin.isDestroyed()) {
+                                askWin.webContents.send('ask-response-stream-chunk', {
+                                    content: this.state.currentResponse
+                                });
+                            }
+                        }
+                    );
+
+                    if (result.success) {
+                        fullDocument = result.content;
+
+                        // Update final state
+                        this.state.isStreaming = false;
+                        this.state.currentResponse = fullDocument;
+                        this._broadcastState();
+
+                        if (askWin && !askWin.isDestroyed()) {
+                            askWin.webContents.send('ask-response-stream-complete', {
+                                content: fullDocument
+                            });
+                        }
+
+                        // Save to database
+                        await askRepository.addAiMessage({
+                            sessionId,
+                            role: 'assistant',
+                            content: fullDocument
+                        });
+
+                        console.log(`[AskService] ✅ Chunked document generated: ${result.stats.estimatedPages} pages, ${result.stats.estimatedWords} words`);
+
+                        return { success: true };
+                    } else {
+                        throw new Error(result.error || 'Chunked generation failed');
+                    }
+                } catch (chunkError) {
+                    console.error('[AskService] Chunked generation failed, falling back to normal generation:', chunkError);
+                    // Fall through to normal generation as fallback
+                }
+            }
+
             // Construire le tableau de messages avec l'historique pour maintenir le contexte
             const messages = [
                 { role: 'system', content: systemPrompt }
@@ -598,11 +710,15 @@ class AskService {
                 });
             }
             
+            // 🆕 Déterminer maxTokens basé sur targetLength
+            const maxTokens = LENGTH_PRESETS[targetLength] || LENGTH_PRESETS.detailed;
+            console.log(`[AskService] Using targetLength: ${targetLength} (maxTokens: ${maxTokens})`);
+
             const streamingLLM = createStreamingLLM(modelInfo.provider, {
                 apiKey: modelInfo.apiKey,
                 model: modelInfo.model,
                 temperature: 0.7,
-                maxTokens: 2048,
+                maxTokens: maxTokens,
                 usePortkey: modelInfo.provider === 'openai-glass',
                 portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
             });
@@ -870,6 +986,209 @@ class AskService {
             errorMessage.includes('invalid') ||
             errorMessage.includes('not supported')
         );
+    }
+
+    /**
+     * 🆕 PHASE 3: CONTINUE GENERATION
+     * Continue la génération d'une réponse existante
+     * @param {string} userInstruction - Instructions optionnelles de l'utilisateur (ex: "développe la section X")
+     * @returns {Promise<{success: boolean, response?: string, error?: string}>}
+     */
+    async continueGeneration(userInstruction = '') {
+        console.log('[AskService] 🔄 Continue generation requested');
+
+        internalBridge.emit('window:requestVisibility', { name: 'ask', visible: true });
+
+        this.state = {
+            ...this.state,
+            isLoading: true,
+            isStreaming: false,
+        };
+        this._broadcastState();
+
+        if (this.abortController) {
+            this.abortController.abort('New continuation request received.');
+        }
+        this.abortController = new AbortController();
+        const { signal } = this.abortController;
+
+        const responseStartTime = Date.now();
+        let sessionId;
+
+        try {
+            // Récupérer la session active et les messages récents
+            sessionId = await sessionRepository.getOrCreateActive('ask');
+            const previousMessages = await conversationHistoryService.getSessionMessages(sessionId);
+
+            if (previousMessages.length < 2) {
+                throw new Error('No previous conversation to continue from');
+            }
+
+            // Récupérer la dernière question et réponse
+            const lastMessages = previousMessages.slice(-2);
+            const lastUserMessage = lastMessages.find(m => m.role === 'user');
+            const lastAssistantMessage = lastMessages.find(m => m.role === 'assistant');
+
+            if (!lastAssistantMessage || !lastUserMessage) {
+                throw new Error('Cannot find last exchange to continue');
+            }
+
+            console.log(`[AskService] Continuing from last response (${lastAssistantMessage.content.length} chars)`);
+
+            // Construire le prompt de continuation
+            const userId = sessionRepository.getCurrentUserId ? await sessionRepository.getCurrentUserId() : null;
+            const activeProfile = agentProfileService.getCurrentProfile();
+
+            // Récupérer les informations du modèle
+            const modelInfo = await modelStateService.getCurrentModelInfo('llm');
+            if (!modelInfo || !modelInfo.apiKey) {
+                throw new Error('AI model or API key not configured.');
+            }
+
+            // Générer le système prompt avec le contexte de continuation
+            const conversationHistory = this._formatConversationForPrompt(previousMessages.slice(0, -2));
+            const baseSystemPrompt = getSystemPrompt(activeProfile, conversationHistory, false);
+
+            const continuationPrompt = `${baseSystemPrompt}
+
+CONTINUATION CONTEXT:
+You previously provided a response to the user's question. The user now wants you to continue or expand on your previous answer.
+
+ORIGINAL QUESTION:
+${lastUserMessage.content}
+
+YOUR PREVIOUS RESPONSE:
+${lastAssistantMessage.content}
+
+${userInstruction ? `USER CONTINUATION INSTRUCTION:\n${userInstruction}\n\n` : ''}TASK:
+Continue your previous response seamlessly. You should:
+1. Pick up exactly where you left off (don't repeat what you already said)
+2. Maintain the same tone, style, and level of detail
+3. Provide additional information, examples, or elaboration
+4. ${userInstruction ? 'Follow the user\'s specific instruction above' : 'Expand on the topic naturally'}
+5. Ensure the continuation flows naturally from your previous response
+
+OUTPUT: Write ONLY the continuation content, starting directly with new information.`;
+
+            const messages = [
+                { role: 'system', content: continuationPrompt },
+                { role: 'user', content: userInstruction || 'Continue your previous response with more details and examples.' }
+            ];
+
+            // Déterminer maxTokens basé sur targetLength par défaut 'detailed'
+            const maxTokens = LENGTH_PRESETS.detailed || 4096;
+            console.log(`[AskService] Continue generation with maxTokens: ${maxTokens}`);
+
+            const streamingLLM = createStreamingLLM(modelInfo.provider, {
+                apiKey: modelInfo.apiKey,
+                model: modelInfo.model,
+                temperature: 0.7,
+                maxTokens: maxTokens,
+                usePortkey: modelInfo.provider === 'openai-glass',
+                portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
+            });
+
+            const response = await streamingLLM.streamChat(messages);
+            const askWin = getWindowPool()?.get('ask');
+
+            if (!askWin || askWin.isDestroyed()) {
+                console.error("[AskService] Ask window is not available to send stream to.");
+                response.body.getReader().cancel();
+                return { success: false, error: 'Ask window is not available.' };
+            }
+
+            const reader = response.body.getReader();
+            signal.addEventListener('abort', () => {
+                console.log(`[AskService] Aborting continuation stream reader. Reason: ${signal.reason}`);
+                reader.cancel(signal.reason).catch(() => { /* ignore */ });
+            });
+
+            // Traiter le stream
+            const decoder = new TextDecoder();
+            let continuationContent = '';
+
+            try {
+                this.state.isLoading = false;
+                this.state.isStreaming = true;
+                this.state.currentResponse = lastAssistantMessage.content + '\n\n'; // Start with existing content
+                this._broadcastState();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+                            if (data === '[DONE]') break;
+
+                            try {
+                                const json = JSON.parse(data);
+                                const token = json.choices[0]?.delta?.content || '';
+                                if (token) {
+                                    continuationContent += token;
+                                    this.state.currentResponse = lastAssistantMessage.content + '\n\n' + continuationContent;
+                                    this._broadcastState();
+                                }
+                            } catch (error) {
+                                // Ignore parsing errors
+                            }
+                        }
+                    }
+                }
+
+                // Sauvegarder la continuation complète
+                this.state.isStreaming = false;
+                const fullUpdatedResponse = lastAssistantMessage.content + '\n\n' + continuationContent;
+                this.state.currentResponse = fullUpdatedResponse;
+                this._broadcastState();
+
+                if (continuationContent) {
+                    // Mettre à jour le message assistant existant en base de données
+                    await askRepository.updateAiMessage({
+                        sessionId,
+                        messageId: lastAssistantMessage.id,
+                        content: fullUpdatedResponse
+                    });
+
+                    console.log(`[AskService] ✅ Continuation added: ${continuationContent.length} new characters`);
+                }
+
+                return { success: true, response: fullUpdatedResponse };
+
+            } catch (streamError) {
+                if (signal.aborted) {
+                    console.log(`[AskService] Continuation stream was intentionally cancelled. Reason: ${signal.reason}`);
+                } else {
+                    console.error('[AskService] Error while processing continuation stream:', streamError);
+                    if (askWin && !askWin.isDestroyed()) {
+                        askWin.webContents.send('ask-response-stream-error', { error: streamError.message });
+                    }
+                }
+                throw streamError;
+            }
+
+        } catch (error) {
+            console.error('[AskService] Error during continuation:', error);
+            this.state = {
+                ...this.state,
+                isLoading: false,
+                isStreaming: false,
+                showTextInput: true,
+            };
+            this._broadcastState();
+
+            const askWin = getWindowPool()?.get('ask');
+            if (askWin && !askWin.isDestroyed()) {
+                const streamError = error.message || 'Unknown error occurred';
+                askWin.webContents.send('ask-response-stream-error', { error: streamError });
+            }
+
+            return { success: false, error: error.message };
+        }
     }
 
 }

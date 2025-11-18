@@ -209,12 +209,61 @@ class PromptEngineeringService {
         const metaInstructions = promptOptimizationService.getMetaPromptInstructions();
         systemPrompt += '\n\n' + metaInstructions;
 
+        // 🆕 PHASE 4: Add Self-Consistency validation instructions
+        systemPrompt += '\n\n' + this.getSelfConsistencyInstructions();
+
         // Add output instructions (final guidelines)
         if (v2Prompt.outputInstructions) {
             systemPrompt += '\n\n' + v2Prompt.outputInstructions;
         }
 
         return systemPrompt;
+    }
+
+    /**
+     * 🆕 PHASE 4: Get Self-Consistency validation instructions
+     * Instructions for the AI to validate its own response before delivering it
+     * @returns {string} Self-consistency validation instructions
+     */
+    getSelfConsistencyInstructions() {
+        return `
+<self_consistency_validation>
+**AVANT DE FOURNIR TA RÉPONSE FINALE** : Applique ces vérifications de cohérence
+
+1. **VALIDATION FACTUELLE**
+   - ❓ Chaque affirmation est-elle vérifiable et exacte ?
+   - ❓ Ai-je utilisé des termes techniques correctement ?
+   - ❓ Y a-t-il des informations obsolètes ou incorrectes ?
+   - ❓ Les exemples sont-ils pertinents et fonctionnels ?
+
+2. **VALIDATION LOGIQUE**
+   - ❓ Ma réponse est-elle cohérente du début à la fin ?
+   - ❓ Y a-t-il des contradictions internes ?
+   - ❓ Les conclusions découlent-elles logiquement des prémisses ?
+   - ❓ Ai-je pris en compte les edge cases importants ?
+
+3. **VALIDATION DE COMPLÉTUDE**
+   - ❓ Ai-je répondu à TOUTES les parties de la question ?
+   - ❓ Les informations essentielles sont-elles présentes ?
+   - ❓ Manque-t-il un contexte important ?
+   - ❓ Des clarifications supplémentaires seraient-elles utiles ?
+
+4. **VALIDATION DE QUALITÉ**
+   - ❓ Ma réponse est-elle actionnable et pratique ?
+   - ❓ Le niveau de détail est-il approprié ?
+   - ❓ La structure est-elle claire et facile à suivre ?
+   - ❓ Ai-je fourni des exemples concrets si nécessaire ?
+
+5. **VALIDATION DE SÉCURITÉ** (code/technique)
+   - ❓ Le code ou la solution proposée est-il sécurisé ?
+   - ❓ Y a-t-il des vulnérabilités potentielles ?
+   - ❓ Les best practices sont-elles respectées ?
+   - ❓ Ai-je mentionné les risques si pertinent ?
+
+**SI UNE VÉRIFICATION ÉCHOUE** : Corrige ta réponse avant de la fournir
+
+**NOTE**: Cette validation se fait mentalement/en arrière-plan. Présente directement ta réponse optimisée.
+</self_consistency_validation>`;
     }
 
     /**
