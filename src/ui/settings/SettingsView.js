@@ -485,6 +485,7 @@ export class SettingsView extends LitElement {
         firebaseUser: { type: Object, state: true },
         isLoading: { type: Boolean, state: true },
         isContentProtectionOn: { type: Boolean, state: true },
+        isScreenshotEnabled: { type: Boolean, state: true },
         saving: { type: Boolean, state: true },
         providerConfig: { type: Object, state: true },
         apiKeys: { type: Object, state: true },
@@ -520,6 +521,7 @@ export class SettingsView extends LitElement {
         this.providerConfig = {};
         this.isLoading = true;
         this.isContentProtectionOn = true;
+        this.isScreenshotEnabled = false;
         this.saving = false;
         this.availableLlmModels = [];
         this.availableSttModels = [];
@@ -619,11 +621,12 @@ export class SettingsView extends LitElement {
         this.isLoading = true;
         try {
             // Load essential data first
-            const [userState, modelSettings, presets, contentProtection, shortcuts, availableProfiles, activeProfile] = await Promise.all([
+            const [userState, modelSettings, presets, contentProtection, screenshotEnabled, shortcuts, availableProfiles, activeProfile] = await Promise.all([
                 window.api.settingsView.getCurrentUser(),
                 window.api.settingsView.getModelSettings(), // Facade call
                 window.api.settingsView.getPresets(),
                 window.api.settingsView.getContentProtectionStatus(),
+                window.api.settingsView.getScreenshotEnabled(),
                 window.api.settingsView.getCurrentShortcuts(),
                 window.api.settingsView.getAvailableProfiles(),
                 window.api.settingsView.getActiveProfile()
@@ -643,6 +646,7 @@ export class SettingsView extends LitElement {
 
             this.presets = presets || [];
             this.isContentProtectionOn = contentProtection;
+            this.isScreenshotEnabled = screenshotEnabled;
             this.shortcuts = shortcuts || {};
             this.availableProfiles = availableProfiles || [];
             this.activeProfile = activeProfile || 'lucide_assistant';
@@ -1146,6 +1150,13 @@ export class SettingsView extends LitElement {
         this.requestUpdate();
     }
 
+    async handleToggleScreenshot() {
+        console.log('Toggle Screenshot clicked');
+        this.isScreenshotEnabled = !this.isScreenshotEnabled;
+        await window.api.settingsView.setScreenshotEnabled(this.isScreenshotEnabled);
+        this.requestUpdate();
+    }
+
     async handleSaveApiKey() {
         const input = this.shadowRoot.getElementById('api-key-input');
         if (!input || !input.value) return;
@@ -1509,7 +1520,11 @@ export class SettingsView extends LitElement {
                     <button class="settings-button full-width" @click=${this.handleToggleInvisibility}>
                         <span>${this.isContentProtectionOn ? 'Désactiver l\'invisibilité' : 'Activer l\'invisibilité'}</span>
                     </button>
-                    
+
+                    <button class="settings-button full-width" @click=${this.handleToggleScreenshot}>
+                        <span>${this.isScreenshotEnabled ? 'Désactiver les captures d\'écran' : 'Activer les captures d\'écran'}</span>
+                    </button>
+
                     <div class="bottom-buttons">
                         ${this.firebaseUser
                             ? html`

@@ -29,6 +29,7 @@ if (shouldUseLiquidGlass) {
 /* ────────────────[ GLASS BYPASS ]─────────────── */
 
 let isContentProtectionOn = true;
+let isScreenshotEnabled = false; // Par défaut désactivé
 let lastVisibleWindows = new Set(['header']);
 
 let currentHeaderState = 'apikey';
@@ -454,6 +455,15 @@ const toggleContentProtection = () => {
     return newStatus;
 };
 
+// Screenshot toggle functions
+const getScreenshotEnabled = () => isScreenshotEnabled;
+
+const setScreenshotEnabled = (enabled) => {
+    isScreenshotEnabled = enabled;
+    console.log(`[Screenshot] Screenshot capture ${enabled ? 'enabled' : 'disabled'}`);
+    return isScreenshotEnabled;
+};
+
 
 const openLoginPage = () => {
     const webUrl = process.env.pickleglass_WEB_URL || 'http://localhost:3000';
@@ -861,6 +871,8 @@ module.exports = {
     toggleContentProtection,
     resizeHeaderWindow,
     getContentProtectionStatus,
+    getScreenshotEnabled,
+    setScreenshotEnabled,
     showSettingsWindow,
     hideSettingsWindow,
     cancelHideSettingsWindow,
