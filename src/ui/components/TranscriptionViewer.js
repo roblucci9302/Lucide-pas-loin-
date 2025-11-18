@@ -16,7 +16,9 @@ export class TranscriptionViewer extends LitElement {
         transcription: { type: Object },
         isEditing: { type: Boolean },
         activeTab: { type: String }, // 'transcript', 'insights', 'notes'
-        isGenerating: { type: Boolean }
+        isGenerating: { type: Boolean },
+        selectedFormat: { type: String }, // 'markdown', 'pdf', 'docx'
+        selectedTemplate: { type: String } // 'meeting_minutes', 'phone_call_summary', etc.
     };
 
     static styles = css`
@@ -103,6 +105,27 @@ export class TranscriptionViewer extends LitElement {
         .action-btn.generating {
             opacity: 0.6;
             cursor: not-allowed;
+        }
+
+        .format-selector {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .format-selector:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .format-selector:focus {
+            outline: none;
+            border-color: rgba(129, 140, 248, 0.4);
         }
 
         .metadata {
@@ -297,6 +320,8 @@ export class TranscriptionViewer extends LitElement {
         this.isEditing = false;
         this.activeTab = 'transcript'; // 'transcript', 'insights', 'notes'
         this.isGenerating = false;
+        this.selectedFormat = 'markdown'; // Default format
+        this.selectedTemplate = 'meeting_minutes'; // Default template
     }
 
     render() {
@@ -323,12 +348,35 @@ export class TranscriptionViewer extends LitElement {
                         `}
 
                         <div class="header-actions">
+                            <select
+                                class="format-selector"
+                                .value="${this.selectedTemplate}"
+                                @change="${e => this.selectedTemplate = e.target.value}"
+                                title="Choose template"
+                            >
+                                <option value="meeting_minutes">Meeting Minutes</option>
+                                <option value="phone_call_summary">Phone Call Summary</option>
+                                <option value="interview_notes">Interview Notes</option>
+                                <option value="lecture_notes">Lecture Notes</option>
+                            </select>
+
+                            <select
+                                class="format-selector"
+                                .value="${this.selectedFormat}"
+                                @change="${e => this.selectedFormat = e.target.value}"
+                                title="Choose format"
+                            >
+                                <option value="markdown">📝 Markdown</option>
+                                <option value="pdf">📄 PDF</option>
+                                <option value="docx">📃 Word</option>
+                            </select>
+
                             <button
                                 class="action-btn ${this.isGenerating ? 'generating' : ''}"
                                 @click="${this._handleGenerateMinutes}"
                                 ?disabled="${this.isGenerating}"
                             >
-                                📄 ${this.isGenerating ? 'Generating...' : 'Generate Minutes'}
+                                📄 ${this.isGenerating ? 'Generating...' : 'Generate Report'}
                             </button>
                         </div>
                     </div>
@@ -485,7 +533,11 @@ export class TranscriptionViewer extends LitElement {
         this.isGenerating = true;
 
         this.dispatchEvent(new CustomEvent('generate-minutes', {
-            detail: { transcriptionId: this.transcription.id },
+            detail: {
+                transcriptionId: this.transcription.id,
+                format: this.selectedFormat,
+                templateId: this.selectedTemplate
+            },
             bubbles: true,
             composed: true
         }));

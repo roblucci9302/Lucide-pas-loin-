@@ -6,6 +6,7 @@
 const { ipcMain } = require('electron');
 const transcriptionService = require('../../features/listen/transcription/transcriptionService');
 const meetingReportService = require('../../features/listen/transcription/meetingReportService');
+const autoTranscriptionService = require('../../features/listen/transcription/autoTranscriptionService');
 const sttRepository = require('../../features/listen/stt/repositories');
 const sessionRepository = require('../../features/common/repositories/session');
 
@@ -441,6 +442,113 @@ module.exports = {
             }
         });
 
-        console.log('[TranscriptionBridge] IPC handlers initialized successfully (13 handlers)');
+        // ====== Auto-Transcription ======
+
+        /**
+         * Handle session end - auto-create transcription
+         * @param {string} sessionId - Session ID
+         * @returns {Object} Created transcription or null
+         */
+        ipcMain.handle('transcription:auto-create-on-session-end', async (event, { sessionId }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const transcription = await autoTranscriptionService.handleSessionEnd(sessionId, userId);
+
+                return {
+                    success: true,
+                    transcription
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error auto-creating transcription:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Manually create transcription from session
+         * @param {string} sessionId - Session ID
+         * @param {Object} options - Additional options
+         * @returns {Object} Created transcription
+         */
+        ipcMain.handle('transcription:create-manual', async (event, { sessionId, options = {} }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const transcription = await autoTranscriptionService.createManual(sessionId, userId, options);
+
+                return {
+                    success: true,
+                    transcription
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error creating manual transcription:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Batch create transcriptions for past sessions
+         * @param {number} limit - Number of sessions to process
+         * @returns {Object} Results
+         */
+        ipcMain.handle('transcription:batch-create', async (event, { limit = 10 }) => {
+            try {
+                const userId = await sessionRepository.getCurrentUserId();
+                if (!userId) {
+                    throw new Error('User not authenticated');
+                }
+
+                const transcriptions = await autoTranscriptionService.batchCreate(userId, limit);
+
+                return {
+                    success: true,
+                    transcriptions,
+                    count: transcriptions.length
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error batch creating transcriptions:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        /**
+         * Enable/disable auto-transcription
+         * @param {boolean} enabled
+         * @returns {Object} Success status
+         */
+        ipcMain.handle('transcription:set-auto-enabled', async (event, { enabled }) => {
+            try {
+                autoTranscriptionService.setEnabled(enabled);
+
+                return {
+                    success: true,
+                    enabled
+                };
+            } catch (error) {
+                console.error('[TranscriptionBridge] Error setting auto-transcription:', error);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        });
+
+        console.log('[TranscriptionBridge] IPC handlers initialized successfully (17 handlers)');
     }
 };

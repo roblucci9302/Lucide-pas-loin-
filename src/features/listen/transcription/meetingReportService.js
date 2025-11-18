@@ -10,7 +10,11 @@ const crypto = require('crypto');
 const transcriptionService = require('./transcriptionService');
 const { createLLM } = require('../../common/ai/factory');
 const tokenTrackingService = require('../../common/services/tokenTrackingService');
+const exportService = require('./exportService');
 const meetingMinutesTemplate = require('../../common/templates/documents/meeting_minutes');
+const phoneCallTemplate = require('../../common/templates/documents/phone_call_summary');
+const interviewNotesTemplate = require('../../common/templates/documents/interview_notes');
+const lectureNotesTemplate = require('../../common/templates/documents/lecture_notes');
 
 class MeetingReportService {
     constructor() {
@@ -31,12 +35,28 @@ class MeetingReportService {
     }
 
     /**
+     * Get template by ID
+     * @param {string} templateId - Template ID
+     * @returns {Object} Template
+     */
+    getTemplate(templateId) {
+        const templates = {
+            'meeting_minutes': meetingMinutesTemplate,
+            'phone_call_summary': phoneCallTemplate,
+            'interview_notes': interviewNotesTemplate,
+            'lecture_notes': lectureNotesTemplate
+        };
+        return templates[templateId] || meetingMinutesTemplate;
+    }
+
+    /**
      * Generate meeting minutes from a transcription
      * @param {Object} options
      * @param {string} options.transcriptionId - ID of the transcription
      * @param {string} options.uid - User ID
-     * @param {string} [options.format='markdown'] - Output format (markdown, pdf)
+     * @param {string} [options.format='markdown'] - Output format (markdown, pdf, docx)
      * @param {string} [options.language='en'] - Language for the report
+     * @param {string} [options.templateId='meeting_minutes'] - Template to use
      * @returns {Promise<Object>} Generated report info
      */
     async generateMeetingMinutes(options) {
@@ -44,7 +64,8 @@ class MeetingReportService {
             transcriptionId,
             uid,
             format = 'markdown',
-            language = 'en'
+            language = 'en',
+            templateId = 'meeting_minutes'
         } = options;
 
         console.log(`[MeetingReportService] Generating meeting minutes for transcription ${transcriptionId}`);
@@ -56,22 +77,27 @@ class MeetingReportService {
                 throw new Error(`Transcription not found: ${transcriptionId}`);
             }
 
-            // 2. Analyze transcription with LLM
-            console.log('[MeetingReportService] Analyzing transcription with LLM...');
-            const analysisData = await this.analyzeTranscription(transcription, language);
+            // 2. Get template
+            const template = this.getTemplate(templateId);
+            console.log(`[MeetingReportService] Using template: ${template.name}`);
 
-            // 3. Fill template with analysis data
-            console.log('[MeetingReportService] Filling meeting minutes template...');
-            const renderedContent = this.renderTemplate(meetingMinutesTemplate, {
+            // 3. Analyze transcription with LLM
+            console.log('[MeetingReportService] Analyzing transcription with LLM...');
+            const analysisData = await this.analyzeTranscription(transcription, language, templateId);
+
+            // 4. Fill template with analysis data
+            console.log('[MeetingReportService] Filling template...');
+            const renderedContent = this.renderTemplate(template, {
                 ...analysisData,
                 fullTranscription: this.formatFullTranscription(transcription.segments)
             });
 
-            // 4. Save document
+            // 5. Save document
             const filePath = await this.saveReport(renderedContent, {
                 format,
                 transcriptionId,
-                title: transcription.title || 'meeting_minutes'
+                title: transcription.title || template.id,
+                templateId
             });
 
             // 5. Store as insight in transcription
@@ -390,25 +416,44 @@ Respond ONLY with valid JSON.`;
      * Save report to file
      */
     async saveReport(content, options) {
-        const { format, transcriptionId, title } = options;
+        const { format, transcriptionId, title, templateId = 'meeting_minutes' } = options;
 
         // Generate filename
         const sanitizedTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const timestamp = Date.now();
-        const filename = `${sanitizedTitle}_${timestamp}.${format}`;
-        const filePath = path.join(this.outputDir, filename);
 
         try {
-            if (format === 'markdown') {
+            let filePath;
+            let result;
+
+            if (format === 'markdown' || format === 'md') {
+                // Save as Markdown
+                const filename = `${sanitizedTitle}_${timestamp}.md`;
+                filePath = path.join(this.outputDir, filename);
                 await fs.writeFile(filePath, content, 'utf-8');
+                result = { filePath, size: Buffer.byteLength(content, 'utf-8') };
             } else if (format === 'pdf') {
-                // TODO: Implement PDF generation using markdown-pdf or similar
-                // For now, save as markdown
-                await fs.writeFile(filePath.replace('.pdf', '.md'), content, 'utf-8');
-                console.warn('[MeetingReportService] PDF generation not yet implemented, saved as markdown');
+                // Export to PDF using exportService
+                const filename = `${sanitizedTitle}_${timestamp}.pdf`;
+                filePath = path.join(this.outputDir, filename);
+                result = await exportService.exportToPDF(content, filePath, {
+                    title: title,
+                    author: 'Lucide AI Assistant'
+                });
+            } else if (format === 'docx') {
+                // Export to DOCX/RTF using exportService
+                const filename = `${sanitizedTitle}_${timestamp}.docx`;
+                filePath = path.join(this.outputDir, filename);
+                result = await exportService.exportToDOCX(content, filePath, {
+                    title: title,
+                    author: 'Lucide AI Assistant'
+                });
+            } else {
+                throw new Error(`Unsupported format: ${format}`);
             }
 
-            return filePath;
+            console.log(`[MeetingReportService] ✅ Report saved: ${result.filePath || filePath}`);
+            return result.filePath || filePath;
         } catch (error) {
             console.error('[MeetingReportService] Error saving report:', error);
             throw error;
