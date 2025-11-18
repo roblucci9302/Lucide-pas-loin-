@@ -29,6 +29,8 @@ const documentService = require('../common/services/documentService');
 const ragService = require('../common/services/ragService');
 const promptEngineeringService = require('../common/services/promptEngineeringService'); // Phase WOW 1 - Jour 5
 const responseQualityService = require('../common/services/responseQualityService'); // Phase 3 - Agent Improvement
+const userLearningService = require('../common/services/userLearningService'); // Phase 2 - Long-term memory
+const personalKnowledgeBaseService = require('../common/services/personalKnowledgeBaseService'); // Phase 2 - Long-term memory
 
 // Try to load sharp, but don't fail if it's not available
 let sharp;
@@ -687,6 +689,35 @@ class AskService {
                     } catch (qualityError) {
                         console.warn('[AskService] Quality evaluation failed (non-critical):', qualityError);
                         // Non-critical error, don't fail the whole operation
+                    }
+
+                    // Phase 2: Long-term memory - Async learning and indexing (fire-and-forget)
+                    // These operations run in background without blocking the user experience
+                    if (metadata.userId && sessionId) {
+                        // Index conversation for semantic search
+                        personalKnowledgeBaseService.indexConversation(sessionId, metadata.userId)
+                            .then(result => {
+                                if (result.success) {
+                                    console.log(`[AskService] 🧠 Conversation indexed: ${result.chunksIndexed} chunks`);
+                                }
+                            })
+                            .catch(indexError => {
+                                console.warn('[AskService] Conversation indexing failed (non-critical):', indexError.message);
+                            });
+
+                        // Analyze conversation to learn about user (every 5th message to avoid overhead)
+                        const messageCount = await conversationHistoryService.getSessionMessages(sessionId).then(msgs => msgs.length);
+                        if (messageCount % 5 === 0 || messageCount >= 10) {
+                            userLearningService.analyzeConversationForLearning(sessionId, metadata.userId)
+                                .then(insights => {
+                                    if (insights && insights.hasInsights) {
+                                        console.log(`[AskService] 🎓 Learned from conversation: ${insights.summary}`);
+                                    }
+                                })
+                                .catch(learningError => {
+                                    console.warn('[AskService] User learning failed (non-critical):', learningError.message);
+                                });
+                        }
                     }
                 } catch(dbError) {
                     console.error("[AskService] DB: Failed to save assistant response after stream ended:", dbError);

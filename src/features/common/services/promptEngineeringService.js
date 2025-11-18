@@ -16,6 +16,8 @@
 const PROFILE_TEMPLATES = require('../prompts/profileTemplates');
 const userContextService = require('./userContextService');
 const conversationHistoryService = require('./conversationHistoryService');
+const userLearningService = require('./userLearningService'); // Phase 2: Long-term memory
+const personalKnowledgeBaseService = require('./personalKnowledgeBaseService'); // Phase 2: Long-term memory
 
 class PromptEngineeringService {
     constructor() {
@@ -57,6 +59,25 @@ class PromptEngineeringService {
                 conversationContext = await this.getConversationContext(sessionId, uid);
             }
 
+            // 3b. Phase 2: Get personalized context from learning (user profile enrichment)
+            let personalizedContext = '';
+            try {
+                personalizedContext = await userLearningService.generatePersonalizedContext(uid);
+            } catch (learningError) {
+                console.warn('[PromptEngineering] Could not retrieve personalized context:', learningError.message);
+            }
+
+            // 3c. Phase 2: Get long-term memory context (semantic search in past conversations)
+            let longTermContext = null;
+            try {
+                longTermContext = await personalKnowledgeBaseService.retrieveLongTermContext(question, uid, {
+                    topK: 3,
+                    minScore: 0.75
+                });
+            } catch (memoryError) {
+                console.warn('[PromptEngineering] Could not retrieve long-term context:', memoryError.message);
+            }
+
             // 4. Detect question type and complexity
             const questionAnalysis = this.analyzeQuestion(question);
 
@@ -65,6 +86,8 @@ class PromptEngineeringService {
                 template,
                 userContext,
                 conversationContext,
+                personalizedContext, // Phase 2
+                longTermContext, // Phase 2
                 questionAnalysis,
                 customContext
             });
@@ -99,7 +122,10 @@ class PromptEngineeringService {
                     questionType: questionAnalysis.type,
                     complexity: questionAnalysis.complexity,
                     hasContext: !!userContext,
-                    hasConversationHistory: !!conversationContext
+                    hasConversationHistory: !!conversationContext,
+                    hasPersonalizedContext: !!personalizedContext, // Phase 2
+                    hasLongTermMemory: longTermContext?.hasContext || false, // Phase 2
+                    longTermMemorySources: longTermContext?.sources?.length || 0 // Phase 2
                 }
             };
         } catch (error) {
@@ -183,6 +209,8 @@ class PromptEngineeringService {
         template,
         userContext,
         conversationContext,
+        personalizedContext,
+        longTermContext,
         questionAnalysis,
         customContext
     }) {
@@ -196,9 +224,19 @@ class PromptEngineeringService {
             }
         }
 
+        // Phase 2: Add personalized context from learning (user profile auto-learning)
+        if (personalizedContext && personalizedContext.length > 0) {
+            prompt += personalizedContext; // Already formatted by userLearningService
+        }
+
         // Add conversation context if available
         if (conversationContext) {
             prompt += `\n\n**Contexte Conversation:**\n${conversationContext}`;
+        }
+
+        // Phase 2: Add long-term memory context (semantic search in history)
+        if (longTermContext && longTermContext.hasContext) {
+            prompt += longTermContext.contextText; // Already formatted by personalKnowledgeBaseService
         }
 
         // Add output structure guidance
