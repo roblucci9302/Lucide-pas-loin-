@@ -154,7 +154,13 @@ contextBridge.exposeInMainWorld('api', {
     setBrowserMode: (browserMode) => ipcRenderer.invoke('ask:setBrowserMode', browserMode),
 
     // Message Handling
-    sendMessage: (text) => ipcRenderer.invoke('ask:sendQuestionFromAsk', text),
+    sendMessage: (text, targetLength = 'detailed') => ipcRenderer.invoke('ask:sendQuestionFromAsk', {
+      userPrompt: text,
+      targetLength
+    }),
+
+    // 🆕 PHASE 6: Continue Generation
+    continueGeneration: (userInstruction = '') => ipcRenderer.invoke('ask:continueGeneration', userInstruction),
 
     // Listeners
     onAskStateUpdate: (callback) => ipcRenderer.on('ask:stateUpdate', callback),

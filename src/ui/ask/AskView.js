@@ -29,6 +29,10 @@ export class AskView extends LitElement {
         currentFavicon: { type: String },
         isSecure: { type: Boolean },
         downloadInProgress: { type: Object },
+        // 🆕 PHASE 6: AI Improvements UI
+        showContinueButton: { type: Boolean },
+        selectedLength: { type: String },
+        isContinuing: { type: Boolean },
     };
 
     static styles = css`
@@ -620,6 +624,89 @@ export class AskView extends LitElement {
             justify-content: center;
             height: 100%;
             gap: 4px;
+        }
+
+        /* 🆕 PHASE 6: Continue Generation Button */
+        .continue-button-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            gap: 12px;
+        }
+
+        .continue-button-container.hidden {
+            display: none;
+        }
+
+        .continue-btn {
+            background: rgba(129, 140, 248, 0.15);
+            color: #818cf8;
+            border: 1px solid rgba(129, 140, 248, 0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .continue-btn:hover {
+            background: rgba(129, 140, 248, 0.25);
+            border-color: rgba(129, 140, 248, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .continue-btn:active {
+            transform: translateY(0);
+        }
+
+        .continue-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 🆕 PHASE 6: Length Selector */
+        .length-selector {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .length-selector-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            white-space: nowrap;
+        }
+
+        .length-option {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.6);
+            border: 1px solid transparent;
+        }
+
+        .length-option:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .length-option.selected {
+            background: rgba(129, 140, 248, 0.2);
+            color: #818cf8;
+            border-color: rgba(129, 140, 248, 0.3);
         }
 
         /* ────────────────[ GLASS BYPASS ]─────────────── */
@@ -1284,9 +1371,15 @@ export class AskView extends LitElement {
         this.downloadInProgress = null;
         this.findRequestId = null; // Pour tracking des requêtes find
 
+        // 🆕 PHASE 6: AI Improvements UI
+        this.showContinueButton = false;
+        this.selectedLength = 'standard'; // concise | standard | detailed | comprehensive
+        this.isContinuing = false;
+
         this.handleSendText = this.handleSendText.bind(this);
         this.handleTextKeydown = this.handleTextKeydown.bind(this);
         this.handleCopy = this.handleCopy.bind(this);
+        this.handleContinueGeneration = this.handleContinueGeneration.bind(this);
         this.clearResponseContent = this.clearResponseContent.bind(this);
         this.handleEscKey = this.handleEscKey.bind(this);
         this.handleScroll = this.handleScroll.bind(this);
@@ -1396,6 +1489,14 @@ export class AskView extends LitElement {
                 this.currentQuestion = newState.currentQuestion;
                 this.isLoading       = newState.isLoading;
                 this.isStreaming     = newState.isStreaming;
+
+                // 🆕 PHASE 6: Show Continue button when response is complete
+                if (!newState.isLoading && !newState.isStreaming && newState.currentResponse) {
+                    this.showContinueButton = true;
+                    this.isContinuing = false;
+                } else {
+                    this.showContinueButton = false;
+                }
 
                 const wasHidden = !this.showTextInput;
                 this.showTextInput = newState.showTextInput;
@@ -1962,9 +2063,35 @@ export class AskView extends LitElement {
         }
 
         if (window.api) {
-            window.api.askView.sendMessage(text).catch(error => {
+            // 🆕 PHASE 6: Pass selectedLength to control response length
+            window.api.askView.sendMessage(text, this.selectedLength).catch(error => {
                 console.error('Error sending text:', error);
             });
+        }
+    }
+
+    // 🆕 PHASE 6: Continue Generation Handler
+    async handleContinueGeneration() {
+        if (!window.api || this.isContinuing || this.isStreaming) {
+            return;
+        }
+
+        this.isContinuing = true;
+        this.showContinueButton = false;
+
+        try {
+            const result = await window.api.askView.continueGeneration('');
+
+            if (!result.success) {
+                console.error('[AskView] Continue generation failed:', result.error);
+                // Reset state on error
+                this.isContinuing = false;
+                this.showContinueButton = true;
+            }
+        } catch (error) {
+            console.error('[AskView] Error continuing generation:', error);
+            this.isContinuing = false;
+            this.showContinueButton = true;
         }
     }
 
@@ -2889,6 +3016,42 @@ export class AskView extends LitElement {
                 <!-- Response Container -->
                 <div class="response-container ${!hasResponse ? 'hidden' : ''}" id="responseContainer">
                     <!-- Content is dynamically generated in updateResponseContent() -->
+                </div>
+
+                <!-- 🆕 PHASE 6: Continue Generation Button -->
+                <div class="continue-button-container ${!this.showContinueButton ? 'hidden' : ''}">
+                    <!-- Length Selector -->
+                    <div class="length-selector">
+                        <span class="length-selector-label">Longueur:</span>
+                        <div
+                            class="length-option ${this.selectedLength === 'concise' ? 'selected' : ''}"
+                            @click=${() => this.selectedLength = 'concise'}
+                        >Court</div>
+                        <div
+                            class="length-option ${this.selectedLength === 'standard' ? 'selected' : ''}"
+                            @click=${() => this.selectedLength = 'standard'}
+                        >Standard</div>
+                        <div
+                            class="length-option ${this.selectedLength === 'detailed' ? 'selected' : ''}"
+                            @click=${() => this.selectedLength = 'detailed'}
+                        >Détaillé</div>
+                        <div
+                            class="length-option ${this.selectedLength === 'comprehensive' ? 'selected' : ''}"
+                            @click=${() => this.selectedLength = 'comprehensive'}
+                        >Complet</div>
+                    </div>
+
+                    <!-- Continue Button -->
+                    <button
+                        class="continue-btn"
+                        @click=${this.handleContinueGeneration}
+                        ?disabled=${this.isContinuing}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                        ${this.isContinuing ? 'Génération...' : 'Continuer'}
+                    </button>
                 </div>
 
                 <!-- Quick Actions Panel (Phase 3: Workflows) - DÉSACTIVÉ -->
