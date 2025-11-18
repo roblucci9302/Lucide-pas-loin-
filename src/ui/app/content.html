@@ -127,6 +127,14 @@
         </script>
         <documents-manager id="documents-manager"></documents-manager>
 
+        <!-- Phase 6: Transcription Center UI -->
+        <script type="module">
+            import { TranscriptionCenter } from '../components/TranscriptionCenter.js';
+            import { TranscriptionCard } from '../components/TranscriptionCard.js';
+            import { TranscriptionViewer } from '../components/TranscriptionViewer.js';
+        </script>
+        <transcription-center id="transcription-center"></transcription-center>
+
         <script>
             window.addEventListener('DOMContentLoaded', () => {
                 const app = document.getElementById('lucide');

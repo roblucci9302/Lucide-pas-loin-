@@ -17,6 +17,7 @@ const memoryBridge = require('./modules/memoryBridge'); // Phase 2 - Long-term m
 const performanceBridge = require('./modules/performanceBridge'); // Phase 3 - Performance & Optimization
 const documentUploadBridge = require('./modules/documentUploadBridge'); // Phase 5 - Document Management (INPUT)
 const documentGenerationBridge = require('./modules/documentGenerationBridge'); // Phase 5 - Document Management (OUTPUT)
+const transcriptionBridge = require('./modules/transcriptionBridge'); // Phase 6 - Transcription Center
 
 module.exports = {
     /**
@@ -40,6 +41,7 @@ module.exports = {
         performanceBridge.initialize(); // Phase 3 - Performance & Optimization
         documentUploadBridge.initialize(); // Phase 5 - Document Management (INPUT)
         documentGenerationBridge.initialize(); // Phase 5 - Document Management (OUTPUT)
+        transcriptionBridge.initialize(); // Phase 6 - Transcription Center
 
         console.log('[FeatureBridge] All bridges initialized successfully');
     },
