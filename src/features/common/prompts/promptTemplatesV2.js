@@ -174,7 +174,7 @@ async function cacheWrapper(key, ttl, fetchFn) {
 // Usage
 app.get('/api/users/:id', async (req, res) => {
   const user = await cacheWrapper(
-    `user:${req.params.id}`,
+    \`user:\${req.params.id}\`,
     300, // 5min TTL
     () => db.users.findById(req.params.id)
   );
