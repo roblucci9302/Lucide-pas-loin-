@@ -15,7 +15,7 @@ const { loaders } = require('../utils/dependencyLoader');
 const uuid = loaders.loadUuid();
 const uuidv4 = uuid.v4;
 const conversationHistoryService = require('./conversationHistoryService');
-const { createStreamingLLM } = require('../common/ai/factory');
+const { createStreamingLLM } = require('../ai/factory');
 const modelStateService = require('./modelStateService');
 
 /**
