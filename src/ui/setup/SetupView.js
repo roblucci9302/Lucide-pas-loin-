@@ -539,7 +539,6 @@ export class SetupView extends TranslationMixin(LitElement) {
         return html`
             <div class="step-content">
                 <div class="step-title">
-                    <span class="step-icon">🤖</span>
                     <span>Choisissez votre IA principale</span>
                 </div>
                 <div class="step-description">
