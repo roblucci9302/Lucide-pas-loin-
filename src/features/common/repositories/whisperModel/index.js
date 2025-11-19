@@ -1,8 +1,29 @@
-const BaseModelRepository = require('../baseModel');
+const { createGenericRepository } = require('../genericRepository');
 
-class WhisperModelRepository extends BaseModelRepository {
-    constructor(db, tableName = 'whisper_models') {
-        super(db, tableName);
+class WhisperModelRepository {
+    constructor() {
+        this.repo = createGenericRepository('whisper_models');
+    }
+
+    // Delegate genericRepository methods
+    async getAll() {
+        return this.repo.getAll();
+    }
+
+    async create(data) {
+        return this.repo.create(data);
+    }
+
+    async findAll(where) {
+        return this.repo.findAll(where);
+    }
+
+    async findOne(where) {
+        return this.repo.findOne(where);
+    }
+
+    async update(where, data) {
+        return this.repo.update(where, data);
     }
 
     async initializeModels(availableModels) {

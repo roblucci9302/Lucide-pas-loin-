@@ -9,7 +9,7 @@
  * - Generate contextual insights
  */
 
-const { createLLM } = require('../../ai/llm/llmProvider');
+const { createLLM } = require('../../common/ai/factory');
 
 class TranscriptionProcessingService {
     constructor() {
