@@ -1,4 +1,6 @@
-const { v4: uuidv4 } = require('uuid');
+const { loaders } = require('../utils/dependencyLoader');
+const uuid = loaders.loadUuid();
+const uuidv4 = uuid.v4;
 const sqliteClient = require('./sqliteClient');
 const embeddingProvider = require('./embeddingProvider');
 

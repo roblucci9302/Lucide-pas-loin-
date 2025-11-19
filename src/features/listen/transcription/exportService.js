@@ -10,7 +10,8 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { BrowserWindow } = require('electron');
-const { marked } = require('marked');
+// Use vendored marked library (available in src/ui/assets/)
+const marked = require('../../../ui/assets/marked-4.3.0.min.js');
 
 class ExportService {
     constructor() {

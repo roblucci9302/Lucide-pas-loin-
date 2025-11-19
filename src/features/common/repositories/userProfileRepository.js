@@ -6,7 +6,9 @@
  */
 
 const { createGenericRepository } = require('./genericRepository');
-const { v4: uuidv4 } = require('uuid');
+const { loaders } = require('../utils/dependencyLoader');
+const uuid = loaders.loadUuid();
+const uuidv4 = uuid.v4;
 
 class UserProfileRepository {
     constructor() {

@@ -755,7 +755,7 @@ module.exports = {
 
         // ====== AI Processing Tools (Phase 6.4) ======
 
-        const transcriptionProcessingService = require('../features/listen/transcription/transcriptionProcessingService');
+        const transcriptionProcessingService = require('../../features/listen/transcription/transcriptionProcessingService');
 
         /**
          * Summarize selected text
