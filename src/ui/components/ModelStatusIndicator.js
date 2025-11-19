@@ -450,7 +450,6 @@ export class ModelStatusIndicator extends TranslationMixin(LitElement) {
 
             return html`
                 <div class="toggle-button" @click=${this.toggleExpand} title="Statut des modèles IA">
-                    <span class="toggle-icon">🤖</span>
                     ${activeCount > 0 ? html`
                         <span class="badge ${downloadingCount > 0 ? 'downloading' : ''}">${activeCount}</span>
                     ` : ''}
@@ -462,7 +461,6 @@ export class ModelStatusIndicator extends TranslationMixin(LitElement) {
             <div class="status-container">
                 <div class="status-header">
                     <div class="status-title">
-                        <span>🤖</span>
                         <span>Statut des modèles IA</span>
                     </div>
                     <button class="close-btn" @click=${this.toggleExpand} title="Fermer">

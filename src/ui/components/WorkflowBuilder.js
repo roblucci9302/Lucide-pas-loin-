@@ -567,7 +567,7 @@ export class WorkflowBuilder extends TranslationMixin(LitElement) {
                         <option value="hr_specialist">👩‍💼 RH Specialist</option>
                         <option value="it_expert">💻 IT Expert</option>
                         <option value="marketing_expert">📱 Marketing Expert</option>
-                        <option value="lucide_assistant">🤖 Assistant Général</option>
+                        <option value="lucide_assistant">✨ Assistant Général</option>
                     </select>
                 </div>
 

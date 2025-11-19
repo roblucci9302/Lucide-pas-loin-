@@ -106,7 +106,7 @@ export class ProfileThemeManager extends LitElement {
         root.style.setProperty('--profile-accent-light', theme.accentLight);
 
         // Also store theme name and icon as data attributes
-        root.setAttribute('data-profile-icon', theme.icon || '🤖');
+        root.setAttribute('data-profile-icon', theme.icon || '');
         root.setAttribute('data-profile-name', theme.name || 'Assistant');
 
         // Disable transitions after animation completes
@@ -133,7 +133,7 @@ export class ProfileThemeManager extends LitElement {
             secondary: '#4f46e5',
             accent: '#818cf8',
             accentLight: '#a5b4fc',
-            icon: '🤖',
+            icon: '',
             name: 'Assistant'
         };
         this.applyTheme(defaultTheme, false);

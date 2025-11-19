@@ -350,7 +350,7 @@ export class HelpView extends TranslationMixin(LitElement) {
             { id: 'settings', icon: '⚙️', label: 'Paramètres' },
             { id: 'shortcuts', icon: '⌨️', label: 'Raccourcis clavier' },
             { id: 'export', icon: '📤', label: 'Export de données' },
-            { id: 'ai-models', icon: '🤖', label: 'Modèles IA' },
+            { id: 'ai-models', icon: '⚡', label: 'Modèles IA' },
             { id: 'troubleshooting', icon: '🔧', label: 'Dépannage' }
         ];
 
@@ -412,7 +412,7 @@ export class HelpView extends TranslationMixin(LitElement) {
                         </div>
                     </div>
                     <div class="feature-card">
-                        <div class="feature-title">🤖 Multiples modèles IA</div>
+                        <div class="feature-title">Multiples modèles IA</div>
                         <div class="feature-description">
                             Support de Claude, ChatGPT, Gemini, et Ollama pour une flexibilité
                             maximale.
@@ -651,7 +651,6 @@ export class HelpView extends TranslationMixin(LitElement) {
         return html`
             <div class="section">
                 <div class="section-title">
-                    <span class="section-icon">🤖</span>
                     <span>Modèles IA disponibles</span>
                 </div>
                 <div class="section-description">

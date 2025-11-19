@@ -301,7 +301,7 @@ export class ProfileSuggestionBanner extends LitElement {
 
         // Map profile IDs to icons (from agentProfileService)
         const profileIcons = {
-            lucide_assistant: '🤖',
+            lucide_assistant: '✨',
             ceo_advisor: '🎯',
             sales_expert: '💼',
             manager_coach: '👥',

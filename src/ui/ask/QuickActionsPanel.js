@@ -210,12 +210,12 @@ export class QuickActionsPanel extends LitElement {
 
     getProfileIcon(profileId) {
         const icons = {
-            'lucide_assistant': '🤖',
+            'lucide_assistant': '✨',
             'hr_specialist': '👩‍💼',
             'it_expert': '💻',
             'marketing_expert': '📱'
         };
-        return icons[profileId] || '🤖';
+        return icons[profileId] || '✨';
     }
 
     render() {
